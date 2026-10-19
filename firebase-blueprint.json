@@ -1,0 +1,422 @@
+{
+  "entities": {
+    "UserProfile": {
+      "title": "UserProfile",
+      "description": "Perfil persistente privado do utilizador na plataforma Luminoria Pro.",
+      "type": "object",
+      "properties": {
+        "userId": {
+          "type": "string",
+          "description": "UID do utilizador autenticado no Firebase Auth.",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "username": {
+          "type": "string",
+          "description": "Nome de exibição público do utilizador.",
+          "minLength": 2,
+          "maxLength": 40
+        },
+        "bio": {
+          "type": "string",
+          "description": "Biografia curta do perfil.",
+          "minLength": 0,
+          "maxLength": 240
+        },
+        "countryCode": {
+          "type": "string",
+          "description": "Código ISO de 2 letras do país.",
+          "minLength": 2,
+          "maxLength": 2,
+          "pattern": "^[A-Z]{2}$"
+        },
+        "maritalStatus": {
+          "type": "string",
+          "description": "Estado civil opcional selecionado no perfil.",
+          "minLength": 1,
+          "maxLength": 32
+        },
+        "favoriteGenres": {
+          "type": "array",
+          "description": "Lista limitada a até 4 gêneros favoritos.",
+          "maxLength": 4
+        },
+        "xp": {
+          "type": "integer",
+          "description": "Pontos de experiência acumulados (0 a 1000000)."
+        },
+        "coins": {
+          "type": "integer",
+          "description": "Saldo de moedas virtuais Luminárias (0 a 1000000)."
+        },
+        "watchHours": {
+          "type": "number",
+          "description": "Horas assistidas acumuladas no mês."
+        },
+        "equippedBorderId": {
+          "type": "string",
+          "description": "ID da borda de avatar equipada.",
+          "minLength": 1,
+          "maxLength": 64,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "equippedThemeId": {
+          "type": "string",
+          "description": "ID do esquema de cores equipado.",
+          "enum": ["lotus", "ocean", "forest", "sunset", "lavender", "midnight"],
+          "minLength": 3,
+          "maxLength": 16
+        },
+        "ownedProductIds": {
+          "type": "array",
+          "description": "IDs dos produtos desbloqueados na loja (máx. 10 items).",
+          "maxLength": 10
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Timestamp de criação do servidor."
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Timestamp de última atualização do servidor."
+        }
+      },
+      "required": [
+        "userId",
+        "username",
+        "bio",
+        "countryCode",
+        "maritalStatus",
+        "favoriteGenres",
+        "xp",
+        "coins",
+        "watchHours",
+        "equippedBorderId",
+        "equippedThemeId",
+        "ownedProductIds",
+        "createdAt",
+        "updatedAt"
+      ]
+    },
+    "GlobalRankEntry": {
+      "title": "GlobalRankEntry",
+      "description": "Registro público isolado sem PII para o Ranking Global Mensal.",
+      "type": "object",
+      "properties": {
+        "userId": {
+          "type": "string",
+          "description": "UID do utilizador proprietário do registro de ranking.",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "username": {
+          "type": "string",
+          "description": "Nome público exibido na tabela de ranking.",
+          "minLength": 2,
+          "maxLength": 40
+        },
+        "countryCode": {
+          "type": "string",
+          "description": "Código ISO de 2 letras do país.",
+          "minLength": 2,
+          "maxLength": 2,
+          "pattern": "^[A-Z]{2}$"
+        },
+        "watchHours": {
+          "type": "number",
+          "description": "Total de horas assistidas no mês para ordenação."
+        },
+        "xp": {
+          "type": "integer",
+          "description": "XP total do utilizador para cálculo de patente."
+        },
+        "equippedBorderId": {
+          "type": "string",
+          "description": "ID da borda de avatar equipada.",
+          "minLength": 1,
+          "maxLength": 64,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "isPublic": {
+          "type": "boolean",
+          "description": "Flag booleana obrigatória para listagem segura no ranking global."
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Timestamp de criação do servidor."
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Timestamp de última atualização do servidor."
+        }
+      },
+      "required": [
+        "userId",
+        "username",
+        "countryCode",
+        "watchHours",
+        "xp",
+        "equippedBorderId",
+        "isPublic",
+        "createdAt",
+        "updatedAt"
+      ]
+    },
+    "UserNotification": {
+      "title": "UserNotification",
+      "description": "Notificação em tempo real persistida no Firestore para alertas de programas favoritos no Guia EPG ou entrada de amigos na Sala de Cinema.",
+      "type": "object",
+      "properties": {
+        "notificationId": {
+          "type": "string",
+          "description": "Identificador único da notificação.",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "userId": {
+          "type": "string",
+          "description": "UID do utilizador destinatário da notificação.",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "type": {
+          "type": "string",
+          "description": "Categoria do alerta: programa EPG prestes a começar ou amigo entrando na Sala de Cinema.",
+          "enum": ["epg_reminder", "cinema_invite"],
+          "minLength": 10,
+          "maxLength": 16
+        },
+        "title": {
+          "type": "string",
+          "description": "Título curto da notificação.",
+          "minLength": 2,
+          "maxLength": 80
+        },
+        "message": {
+          "type": "string",
+          "description": "Corpo descritivo do alerta com horário EPG ou nome do amigo e código da sala.",
+          "minLength": 2,
+          "maxLength": 220
+        },
+        "targetId": {
+          "type": "string",
+          "description": "ID do canal EPG ou código da Sala de Cinema associado à ação rápida.",
+          "minLength": 1,
+          "maxLength": 64,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "read": {
+          "type": "boolean",
+          "description": "Indica se a notificação já foi lida pelo utilizador."
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Timestamp de criação do servidor."
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Timestamp de última atualização do servidor."
+        }
+      },
+      "required": [
+        "notificationId",
+        "userId",
+        "type",
+        "title",
+        "message",
+        "targetId",
+        "read",
+        "createdAt",
+        "updatedAt"
+      ]
+    },
+    "TmdbMovie": {
+      "title": "TmdbMovie",
+      "description": "Filme indexado do TMDB persistido no cache do Firestore.",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "ID do documento do filme (ex: tmdb-12345).",
+          "minLength": 1,
+          "maxLength": 64,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "tmdbId": {
+          "type": "integer",
+          "description": "ID numérico oficial no banco The Movie Database."
+        },
+        "title": {
+          "type": "string",
+          "description": "Título traduzido do filme.",
+          "minLength": 1,
+          "maxLength": 120
+        },
+        "originalTitle": {
+          "type": "string",
+          "description": "Título original do filme.",
+          "minLength": 1,
+          "maxLength": 120
+        },
+        "overview": {
+          "type": "string",
+          "description": "Sinopse em português.",
+          "maxLength": 1000
+        },
+        "posterPath": {
+          "type": "string",
+          "description": "URL completa do pôster no CDN do TMDB.",
+          "maxLength": 300
+        },
+        "backdropPath": {
+          "type": "string",
+          "description": "URL completa da imagem widescreen de fundo.",
+          "maxLength": 300
+        },
+        "releaseDate": {
+          "type": "string",
+          "description": "Data de lançamento do filme (YYYY-MM-DD).",
+          "maxLength": 32
+        },
+        "voteAverage": {
+          "type": "number",
+          "description": "Nota média de avaliação no TMDB (0 a 10)."
+        },
+        "voteCount": {
+          "type": "integer",
+          "description": "Número total de votos."
+        },
+        "genres": {
+          "type": "array",
+          "description": "Lista de gêneros em português (máx 4).",
+          "maxLength": 4
+        },
+        "category": {
+          "type": "string",
+          "description": "Categoria da lista sincronizada.",
+          "enum": ["trending", "popular", "top_rated", "now_playing"]
+        },
+        "mediaType": {
+          "type": "string",
+          "description": "Tipo de mídia fixo em movie.",
+          "enum": ["movie"]
+        },
+        "durationMinutes": {
+          "type": "integer",
+          "description": "Duração estimada ou real em minutos."
+        },
+        "syncedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Timestamp da sincronização no servidor."
+        }
+      },
+      "required": [
+        "id",
+        "tmdbId",
+        "title",
+        "posterPath",
+        "backdropPath",
+        "releaseDate",
+        "voteAverage",
+        "genres",
+        "category",
+        "mediaType"
+      ]
+    },
+    "TmdbSyncMeta": {
+      "title": "TmdbSyncMeta",
+      "description": "Metadados de status do cache e economia de tokens TMDB no Firestore.",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Identificador único do status (ex: catalog_status).",
+          "minLength": 1,
+          "maxLength": 64,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "lastSyncedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Timestamp da última sincronização bem sucedida."
+        },
+        "totalMovies": {
+          "type": "integer",
+          "description": "Total de filmes em cache."
+        },
+        "categoriesSynced": {
+          "type": "array",
+          "description": "Categorias sincronizadas recentemente.",
+          "maxLength": 10
+        },
+        "syncedBy": {
+          "type": "string",
+          "description": "Nome ou identificador de quem disparou a sincronização.",
+          "maxLength": 64
+        },
+        "cachedInFirestore": {
+          "type": "boolean",
+          "description": "Indica cache ativo no Firestore."
+        },
+        "tokensSavedEstimate": {
+          "type": "integer",
+          "description": "Estimativa de tokens e requisições economizadas."
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Timestamp de atualização."
+        }
+      },
+      "required": [
+        "id",
+        "totalMovies",
+        "categoriesSynced",
+        "cachedInFirestore"
+      ]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": {
+        "$ref": "#/entities/UserProfile"
+      },
+      "description": "Perfis individuais dos utilizadores (leitura e escrita restritas ao próprio dono)."
+    },
+    "/rankings/{userId}": {
+      "schema": {
+        "$ref": "#/entities/GlobalRankEntry"
+      },
+      "description": "Entradas públicas sem PII do Ranking Global sincronizadas com o perfil do utilizador."
+    },
+    "/users/{userId}/notifications/{notificationId}": {
+      "schema": {
+        "$ref": "#/entities/UserNotification"
+      },
+      "description": "Subcoleção privada de alertas de EPG e Sala de Cinema do utilizador."
+    },
+    "/tmdb_movies/{movieId}": {
+      "schema": {
+        "$ref": "#/entities/TmdbMovie"
+      },
+      "description": "Filmes do TMDB persistidos no cache Firestore com pôsteres e sinopses."
+    },
+    "/tmdb_sync_meta/{metaId}": {
+      "schema": {
+        "$ref": "#/entities/TmdbSyncMeta"
+      },
+      "description": "Metadados de status e frequência de sincronização do cache TMDB."
+    }
+  }
+}

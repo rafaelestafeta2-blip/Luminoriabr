@@ -1,0 +1,395 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Pillar 0: Global Safety Net (Default-Deny Catch-All)
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // Phase 3: Hardened Global Helpers
+    function isValidId(id) {
+      return id is string && id.size() >= 1 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isVerifiedUser() {
+      return isSignedIn() && request.auth.token.email_verified == true;
+    }
+
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+
+    // Pillar 2 & 5: UserProfile Validation Blueprint
+    function isValidUserProfile(data) {
+      return data.keys().hasAll([
+          'userId',
+          'username',
+          'bio',
+          'countryCode',
+          'maritalStatus',
+          'favoriteGenres',
+          'xp',
+          'coins',
+          'watchHours',
+          'equippedBorderId',
+          'equippedThemeId',
+          'ownedProductIds',
+          'createdAt',
+          'updatedAt'
+        ]) &&
+        data.keys().hasOnly([
+          'userId',
+          'username',
+          'bio',
+          'countryCode',
+          'maritalStatus',
+          'favoriteGenres',
+          'xp',
+          'coins',
+          'watchHours',
+          'equippedBorderId',
+          'equippedThemeId',
+          'ownedProductIds',
+          'createdAt',
+          'updatedAt'
+        ]) &&
+        data.userId is string &&
+        data.userId.size() >= 1 &&
+        data.userId.size() <= 128 &&
+        data.userId.matches('^[a-zA-Z0-9_\\-]+$') &&
+        data.userId == request.auth.uid &&
+        data.username is string &&
+        data.username.size() >= 2 &&
+        data.username.size() <= 40 &&
+        data.bio is string &&
+        data.bio.size() <= 240 &&
+        data.countryCode is string &&
+        data.countryCode.size() == 2 &&
+        data.countryCode.matches('^[A-Z]{2}$') &&
+        data.maritalStatus is string &&
+        data.maritalStatus.size() >= 1 &&
+        data.maritalStatus.size() <= 32 &&
+        data.favoriteGenres is list &&
+        data.favoriteGenres.size() <= 4 &&
+        (data.favoriteGenres.size() == 0 || (data.favoriteGenres[0] is string && data.favoriteGenres[0].size() <= 24)) &&
+        data.xp is int && data.xp >= 0 && data.xp <= 1000000 &&
+        data.coins is int && data.coins >= 0 && data.coins <= 1000000 &&
+        (data.watchHours is int || data.watchHours is float) &&
+        data.watchHours >= 0 &&
+        data.watchHours <= 100000 &&
+        data.equippedBorderId is string &&
+        data.equippedBorderId.size() >= 1 &&
+        data.equippedBorderId.size() <= 64 &&
+        data.equippedBorderId.matches('^[a-zA-Z0-9_\\-]+$') &&
+        data.equippedThemeId is string &&
+        data.equippedThemeId.size() >= 3 &&
+        data.equippedThemeId.size() <= 16 &&
+        data.equippedThemeId in ['lotus', 'ocean', 'forest', 'sunset', 'lavender', 'midnight'] &&
+        data.ownedProductIds is list &&
+        data.ownedProductIds.size() <= 10 &&
+        (data.ownedProductIds.size() == 0 || (data.ownedProductIds[0] is string && data.ownedProductIds[0].size() <= 64)) &&
+        data.createdAt is timestamp &&
+        data.updatedAt is timestamp;
+    }
+
+    // Pillar 2: GlobalRankEntry Validation Blueprint
+    function isValidGlobalRankEntry(data) {
+      return data.keys().hasAll([
+          'userId',
+          'username',
+          'countryCode',
+          'watchHours',
+          'xp',
+          'equippedBorderId',
+          'isPublic',
+          'createdAt',
+          'updatedAt'
+        ]) &&
+        data.keys().hasOnly([
+          'userId',
+          'username',
+          'countryCode',
+          'watchHours',
+          'xp',
+          'equippedBorderId',
+          'isPublic',
+          'createdAt',
+          'updatedAt'
+        ]) &&
+        data.userId is string &&
+        data.userId.size() >= 1 &&
+        data.userId.size() <= 128 &&
+        data.userId.matches('^[a-zA-Z0-9_\\-]+$') &&
+        data.userId == request.auth.uid &&
+        data.username is string &&
+        data.username.size() >= 2 &&
+        data.username.size() <= 40 &&
+        data.countryCode is string &&
+        data.countryCode.size() == 2 &&
+        data.countryCode.matches('^[A-Z]{2}$') &&
+        (data.watchHours is int || data.watchHours is float) &&
+        data.watchHours >= 0 &&
+        data.watchHours <= 100000 &&
+        data.xp is int && data.xp >= 0 && data.xp <= 1000000 &&
+        data.equippedBorderId is string &&
+        data.equippedBorderId.size() >= 1 &&
+        data.equippedBorderId.size() <= 64 &&
+        data.equippedBorderId.matches('^[a-zA-Z0-9_\\-]+$') &&
+        data.isPublic is bool &&
+        data.isPublic == true &&
+        data.createdAt is timestamp &&
+        data.updatedAt is timestamp;
+    }
+
+    // Pillar 2: UserNotification Validation Blueprint
+    function isValidUserNotification(data, notificationId) {
+      return data.keys().hasAll([
+          'notificationId',
+          'userId',
+          'type',
+          'title',
+          'message',
+          'targetId',
+          'read',
+          'createdAt',
+          'updatedAt'
+        ]) &&
+        data.keys().hasOnly([
+          'notificationId',
+          'userId',
+          'type',
+          'title',
+          'message',
+          'targetId',
+          'read',
+          'createdAt',
+          'updatedAt'
+        ]) &&
+        data.notificationId is string &&
+        data.notificationId.size() >= 1 &&
+        data.notificationId.size() <= 128 &&
+        data.notificationId.matches('^[a-zA-Z0-9_\\-]+$') &&
+        data.notificationId == notificationId &&
+        data.userId is string &&
+        data.userId.size() >= 1 &&
+        data.userId.size() <= 128 &&
+        data.userId.matches('^[a-zA-Z0-9_\\-]+$') &&
+        data.userId == request.auth.uid &&
+        data.type is string &&
+        data.type.size() >= 10 &&
+        data.type.size() <= 16 &&
+        data.type in ['epg_reminder', 'cinema_invite'] &&
+        data.title is string &&
+        data.title.size() >= 2 &&
+        data.title.size() <= 80 &&
+        data.message is string &&
+        data.message.size() >= 2 &&
+        data.message.size() <= 220 &&
+        data.targetId is string &&
+        data.targetId.size() >= 1 &&
+        data.targetId.size() <= 64 &&
+        data.targetId.matches('^[a-zA-Z0-9_\\-]+$') &&
+        data.read is bool &&
+        data.createdAt is timestamp &&
+        data.updatedAt is timestamp;
+    }
+
+    // Pillar 2: TmdbMovie Validation Blueprint
+    function isValidTmdbMovie(data) {
+      return data.keys().hasAll([
+          'id',
+          'tmdbId',
+          'title',
+          'originalTitle',
+          'overview',
+          'posterPath',
+          'backdropPath',
+          'releaseDate',
+          'voteAverage',
+          'voteCount',
+          'genres',
+          'category',
+          'mediaType',
+          'durationMinutes',
+          'syncedAt'
+        ]) &&
+        data.id is string &&
+        data.id.size() >= 1 &&
+        data.id.size() <= 64 &&
+        data.tmdbId is int &&
+        data.title is string &&
+        data.title.size() >= 1 &&
+        data.title.size() <= 120 &&
+        data.posterPath is string &&
+        data.posterPath.size() <= 300 &&
+        data.backdropPath is string &&
+        data.backdropPath.size() <= 300 &&
+        (data.voteAverage is int || data.voteAverage is float) &&
+        data.voteAverage >= 0 &&
+        data.voteAverage <= 10 &&
+        data.genres is list &&
+        data.genres.size() <= 4 &&
+        data.category in ['trending', 'popular', 'top_rated', 'now_playing'] &&
+        data.mediaType == 'movie';
+    }
+
+    // Pillar 2: TmdbSyncMeta Validation Blueprint
+    function isValidTmdbSyncMeta(data) {
+      return data.id is string &&
+        data.id.size() >= 1 &&
+        data.id.size() <= 64 &&
+        data.totalMovies is int &&
+        data.totalMovies >= 0 &&
+        data.categoriesSynced is list &&
+        data.cachedInFirestore is bool;
+    }
+
+    // Collection 1: /users/{userId} (Private User Profile — Strictly Owner Isolated)
+    match /users/{userId} {
+      allow get: if isOwner(userId) && isValidId(userId);
+      allow list: if false;
+
+      allow create: if isVerifiedUser() &&
+        isOwner(userId) &&
+        isValidId(userId) &&
+        isValidUserProfile(incoming()) &&
+        incoming().createdAt == request.time &&
+        incoming().updatedAt == request.time &&
+        existsAfter(/databases/$(database)/documents/rankings/$(userId));
+
+      allow update: if isVerifiedUser() &&
+        isOwner(userId) &&
+        isValidId(userId) &&
+        isValidUserProfile(incoming()) &&
+        incoming().userId == existing().userId &&
+        incoming().createdAt == existing().createdAt &&
+        incoming().updatedAt == request.time &&
+        (
+          incoming().diff(existing()).affectedKeys().hasOnly([
+            'username',
+            'bio',
+            'countryCode',
+            'maritalStatus',
+            'favoriteGenres',
+            'equippedBorderId',
+            'equippedThemeId',
+            'updatedAt'
+          ]) ||
+          incoming().diff(existing()).affectedKeys().hasOnly([
+            'xp',
+            'coins',
+            'watchHours',
+            'ownedProductIds',
+            'equippedBorderId',
+            'equippedThemeId',
+            'updatedAt'
+          ])
+        ) &&
+        existsAfter(/databases/$(database)/documents/rankings/$(userId));
+
+      allow delete: if false;
+
+      // Subcollection 1A: /users/{userId}/notifications/{notificationId}
+      match /notifications/{notificationId} {
+        allow get: if isOwner(userId) &&
+          isValidId(userId) &&
+          isValidId(notificationId) &&
+          exists(/databases/$(database)/documents/users/$(userId));
+
+        allow list: if isOwner(userId) && existing().userId == request.auth.uid;
+
+        allow create: if isVerifiedUser() &&
+          isOwner(userId) &&
+          isValidId(userId) &&
+          isValidId(notificationId) &&
+          isValidUserNotification(incoming(), notificationId) &&
+          incoming().createdAt == request.time &&
+          incoming().updatedAt == request.time &&
+          exists(/databases/$(database)/documents/users/$(userId));
+
+        allow update: if isVerifiedUser() &&
+          isOwner(userId) &&
+          isValidId(userId) &&
+          isValidId(notificationId) &&
+          isValidUserNotification(incoming(), notificationId) &&
+          incoming().notificationId == existing().notificationId &&
+          incoming().userId == existing().userId &&
+          incoming().createdAt == existing().createdAt &&
+          incoming().updatedAt == request.time &&
+          incoming().diff(existing()).affectedKeys().hasOnly(['read', 'updatedAt']) &&
+          exists(/databases/$(database)/documents/users/$(userId));
+
+        allow delete: if isVerifiedUser() &&
+          isOwner(userId) &&
+          isValidId(userId) &&
+          isValidId(notificationId) &&
+          exists(/databases/$(database)/documents/users/$(userId));
+      }
+    }
+
+    // Collection 2: /rankings/{userId} (Public Non-PII Global Leaderboard)
+    match /rankings/{userId} {
+      allow get: if isSignedIn() && isValidId(userId) && existing().isPublic == true;
+      allow list: if isSignedIn() && existing().isPublic == true && existing().watchHours >= 0;
+
+      allow create: if isVerifiedUser() &&
+        isOwner(userId) &&
+        isValidId(userId) &&
+        isValidGlobalRankEntry(incoming()) &&
+        incoming().createdAt == request.time &&
+        incoming().updatedAt == request.time &&
+        (
+          exists(/databases/$(database)/documents/users/$(userId)) ||
+          existsAfter(/databases/$(database)/documents/users/$(userId))
+        );
+
+      allow update: if isVerifiedUser() &&
+        isOwner(userId) &&
+        isValidId(userId) &&
+        isValidGlobalRankEntry(incoming()) &&
+        incoming().userId == existing().userId &&
+        incoming().createdAt == existing().createdAt &&
+        incoming().updatedAt == request.time &&
+        incoming().diff(existing()).affectedKeys().hasOnly([
+          'username',
+          'countryCode',
+          'watchHours',
+          'xp',
+          'equippedBorderId',
+          'updatedAt'
+        ]) &&
+        (
+          exists(/databases/$(database)/documents/users/$(userId)) ||
+          existsAfter(/databases/$(database)/documents/users/$(userId))
+        );
+
+      allow delete: if false;
+    }
+
+    // Collection 3: /tmdb_movies/{movieId} (Persisted TMDB Cache in Firestore)
+    match /tmdb_movies/{movieId} {
+      allow get, list: if isSignedIn() && isValidId(movieId);
+      allow create, update: if isVerifiedUser() && isValidId(movieId) && isValidTmdbMovie(incoming());
+      allow delete: if false;
+    }
+
+    // Collection 4: /tmdb_sync_meta/{metaId} (TMDB Cache Status & Metadata)
+    match /tmdb_sync_meta/{metaId} {
+      allow get, list: if isSignedIn() && isValidId(metaId);
+      allow create, update: if isVerifiedUser() && isValidId(metaId) && isValidTmdbSyncMeta(incoming());
+      allow delete: if false;
+    }
+  }
+}

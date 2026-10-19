@@ -1,0 +1,6 @@
+{
+  "name": "Luminoria Pro",
+  "description": "Plataforma modular de streaming IPTV, VOD, Sala de Cinema sincronizada, Guia EPG, Multi-Tela, Ranking Global e Loja de Luminárias.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
