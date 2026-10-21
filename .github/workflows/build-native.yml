@@ -86,10 +86,16 @@ jobs:
           echo "ANDROID_HOME=$ANDROID_HOME" >> $GITHUB_ENV
           mkdir -p android
           echo "sdk.dir=$ANDROID_HOME" > android/local.properties
-          if [ -d "$ANDROID_HOME/cmdline-tools/latest/bin" ]; then
-            echo "$ANDROID_HOME/cmdline-tools/latest/bin" >> $GITHUB_PATH
-            yes | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --licenses || true
-            $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --install "platforms;android-35" "build-tools;35.0.0" "platform-tools" || true
+          for d in "$ANDROID_HOME"/cmdline-tools/*/bin "$ANDROID_HOME"/tools/bin; do
+            if [ -x "$d/sdkmanager" ]; then
+              echo "$d" >> $GITHUB_PATH
+              export PATH="$d:$PATH"
+              break
+            fi
+          done
+          if command -v sdkmanager &> /dev/null; then
+            yes | sdkmanager --licenses || true
+            sdkmanager --install "platforms;android-35" "build-tools;35.0.0" "platform-tools" || true
           fi
 
       - name: Sync Capacitor Android
