@@ -120,7 +120,7 @@ export function useVideoPlayer(
       attemptAutoPlay();
     }
 
-    // Watchdog: if external IPTV stream hangs for >8s with readyState === 0, trigger fallback
+    // Watchdog: if external IPTV stream hangs for >10s with readyState === 0, mark codec/stream notice
     const watchdog = setTimeout(() => {
       if (
         videoRef.current &&
@@ -129,7 +129,7 @@ export function useVideoPlayer(
       ) {
         handleVideoError();
       }
-    }, 8000);
+    }, 10000);
 
     return () => {
       clearTimeout(watchdog);
@@ -138,18 +138,10 @@ export function useVideoPlayer(
   }, [currentSrc]);
 
   const handleVideoError = () => {
-    const primaryFallback = getDeterministicHdStream(title || streamUrl);
-    const secondaryFallback = REAL_HD_WEBM_STREAMS[0];
-
-    if (currentSrc !== primaryFallback && currentSrc !== secondaryFallback) {
-      setHasError(true);
-      setCurrentSrc(primaryFallback);
-    } else if (currentSrc === primaryFallback && currentSrc !== secondaryFallback) {
-      setHasError(true);
-      setCurrentSrc(secondaryFallback);
-    } else {
-      setIsBuffering(false);
-    }
+    destroyEngines();
+    setHasError(true);
+    setIsBuffering(false);
+    setIsPlaying(false);
   };
 
   const handleUserActivity = () => {

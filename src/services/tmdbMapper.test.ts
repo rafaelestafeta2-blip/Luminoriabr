@@ -103,9 +103,17 @@ test('mergeTmdbIntoVodCatalog populates TMDB movies alongside existing catalog',
   assert.ok(duna);
   assert.equal(duna?.category, 'AVENTURA');
   assert.equal(duna?.posterUrl, 'https://image.tmdb.org/t/p/w500/dune.jpg');
+  // Since Duna is not in the M3U list, it should be tagged as Coming Soon ("EM BREVE")
+  assert.equal(duna?.isComingSoon, true);
+
+  // Verify existing M3U item with real stream URL is NOT coming soon
+  const cap = merged.find((m) => m.id === 'vod-1');
+  assert.equal(cap?.isComingSoon, false);
+  assert.equal(cap?.hasM3uStream, true);
 
   // Verify series item is retained
   const tulsa = merged.find((m) => m.id === 'series-1');
   assert.ok(tulsa);
   assert.equal(tulsa?.mediaType, 'series');
 });
+

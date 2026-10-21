@@ -62,6 +62,8 @@ export const AndroidNativePlayerBar: React.FC<AndroidNativePlayerBarProps> = ({
     } catch {}
   };
 
+  const isIos = primaryIntents.platform === 'ios';
+
   return (
     <div className="p-4 rounded-2xl bg-gradient-to-r from-[#0B121E] via-[#0F172A] to-[#0B121E] border border-cyan-500/30 space-y-3 shadow-lg">
       <div className="flex flex-wrap items-center justify-between gap-2">
@@ -71,18 +73,20 @@ export const AndroidNativePlayerBar: React.FC<AndroidNativePlayerBarProps> = ({
           </div>
           <div>
             <h4 className="text-xs font-extrabold text-white flex items-center gap-1.5">
-              <span>Motor Nativo Android & Anti-Bloqueio IPTV</span>
+              <span>{isIos ? 'Motor Nativo iPhone & Anti-Bloqueio' : 'Motor Nativo Android & Anti-Bloqueio IPTV'}</span>
               <span className="px-2 py-0.5 rounded-full text-[10px] font-mono bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
-                EXOPLAYER / CODEC H.264 & MKV
+                {isIos ? 'AVPLAYER APPLE / H.264 & HEVC' : 'EXOPLAYER / CODEC H.264 & MKV'}
               </span>
             </h4>
             <p className="text-[11px] text-white/65">
-              Se o servidor da lista bloquear o navegador ou usar áudio AC3/MKV, ative o Player Nativo Android abaixo:
+              {isIos
+                ? 'No iPhone, use o Player Nativo AVPlayer (Safari) ou abra direto no VLC/Infuse para reprodução fluida:'
+                : 'Se o servidor da lista bloquear o navegador ou usar áudio AC3/MKV, ative o Player Nativo Android abaixo:'}
             </p>
           </div>
         </div>
 
-        {/* Switch internal WebView video tag to native Android OS controls */}
+        {/* Switch internal WebView video tag to native OS controls */}
         <button
           type="button"
           onClick={onToggleAndroidNativeMode}
@@ -96,38 +100,44 @@ export const AndroidNativePlayerBar: React.FC<AndroidNativePlayerBarProps> = ({
           <span>
             {isAndroidNativeMode
               ? 'Player Nativo Interno: ATIVO'
+              : isIos
+              ? 'Ativar Controles Nativos iOS'
               : 'Ativar Player Nativo Interno (Android)'}
           </span>
         </button>
       </div>
 
-      {/* Direct Android Intent Deep-Links Row */}
+      {/* Direct Device Native Deep-Links Row */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2 pt-1">
-        {/* 1. Android Built-in System Video Player (intent://) */}
+        {/* 1. Primary Native Player (AVPlayer on iOS via direct stream / ExoPlayer intent on Android) */}
         <a
-          href={primaryIntents.systemVideoPlayerIntent}
+          href={primaryIntents.primaryNativeUrl}
+          target={isIos ? '_blank' : undefined}
+          rel={isIos ? 'noopener noreferrer' : undefined}
           className="px-3.5 py-2.5 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-400 hover:to-teal-400 text-black font-black text-xs flex items-center justify-center gap-2 shadow-[0_0_20px_rgba(16,185,129,0.3)] transition-transform active:scale-95"
         >
           <Smartphone className="w-4 h-4 shrink-0" />
-          <span className="truncate">Player Nativo Android</span>
+          <span className="truncate">{primaryIntents.primaryNativeLabel}</span>
         </a>
 
-        {/* 2. VLC for Android (intent:// package=org.videolan.vlc) */}
+        {/* 2. VLC Player (iOS or Android) */}
         <a
-          href={primaryIntents.vlcIntent}
+          href={primaryIntents.vlcUrl}
           className="px-3.5 py-2.5 rounded-xl bg-amber-500/20 hover:bg-amber-500/30 border border-amber-500/40 text-amber-300 font-bold text-xs flex items-center justify-center gap-2 transition-colors"
         >
           <ExternalLink className="w-3.5 h-3.5 shrink-0" />
-          <span className="truncate">Abrir no VLC Android</span>
+          <span className="truncate">{primaryIntents.vlcLabel}</span>
         </a>
 
-        {/* 3. MX Player Android (intent:// package=com.mxtech.videoplayer.ad) */}
+        {/* 3. Secondary Native Player (Infuse on iOS / MX Player on Android) */}
         <a
-          href={primaryIntents.mxPlayerIntent}
+          href={primaryIntents.secondaryPlayerUrl}
+          target={isIos && !primaryIntents.secondaryPlayerUrl.startsWith('infuse://') ? '_blank' : undefined}
+          rel={isIos ? 'noopener noreferrer' : undefined}
           className="px-3.5 py-2.5 rounded-xl bg-blue-500/20 hover:bg-blue-500/30 border border-blue-500/40 text-blue-300 font-bold text-xs flex items-center justify-center gap-2 transition-colors"
         >
           <Tv className="w-3.5 h-3.5 shrink-0" />
-          <span className="truncate">Abrir no MX Player</span>
+          <span className="truncate">{primaryIntents.secondaryPlayerLabel}</span>
         </a>
 
         {/* 4. Copy Direct Stream Link or Direct Edge Route */}

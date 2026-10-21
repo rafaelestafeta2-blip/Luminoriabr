@@ -3,6 +3,7 @@ import { Play, Sparkles, Trophy, Users, Coins, Shield, Cloud, LogOut, Bell } fro
 import { useLuminoria } from '../../context/LuminoriaContext';
 import { NavSectionId } from '../../types/luminoria';
 import { getRankForXp, levelFromXp } from '../../utils/luminoriaLogic';
+import { TvModeToggle } from '../tv/TvModeToggle';
 
 const NAV_LINKS: { id: NavSectionId; label: string }[] = [
   { id: 'home', label: 'Início' },
@@ -23,6 +24,7 @@ export const TopNavbar: React.FC = () => {
     unreadNotificationCount,
     setIsNotificationsDrawerOpen,
     authUser,
+    isLoggedIn,
     isCloudSynced,
     loginWithGoogle,
     logoutFirebase,
@@ -120,25 +122,26 @@ export const TopNavbar: React.FC = () => {
 
         {/* Interactive Workspace Utility Controls */}
         <div className="flex flex-wrap items-center justify-between sm:justify-end gap-3 w-full md:w-auto md:ml-auto">
-          {authUser ? (
+          <TvModeToggle />
+
+          {isLoggedIn ? (
             <button
               type="button"
               onClick={logoutFirebase}
-              className="flex items-center gap-1.5 text-emerald-400 hover:text-emerald-300 transition-colors whitespace-nowrap shrink-0"
-              title="Conectado ao Firebase Firestore. Clique para sair."
+              className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-white/5 hover:bg-rose-500/20 text-[#A0A0B0] hover:text-rose-300 border border-white/10 transition-colors whitespace-nowrap shrink-0 cursor-pointer"
+              title="Encerrar sessão e voltar ao login"
             >
-              <Cloud className="w-3.5 h-3.5" />
-              <span>{isCloudSynced ? 'Firestore Ativo' : 'Sincronizando'}</span>
-              <LogOut className="w-3 h-3 ml-0.5 text-[#A0A0B0]" />
+              <LogOut className="w-3.5 h-3.5" />
+              <span>Sair</span>
             </button>
           ) : (
             <button
               type="button"
               onClick={loginWithGoogle}
-              className="flex items-center gap-1.5 text-emerald-400 hover:text-emerald-300 transition-colors whitespace-nowrap shrink-0"
+              className="flex items-center gap-1.5 text-emerald-400 hover:text-emerald-300 transition-colors whitespace-nowrap shrink-0 cursor-pointer"
             >
               <Cloud className="w-3.5 h-3.5" />
-              <span>Sincronizar Nuvem</span>
+              <span>Entrar</span>
             </button>
           )}
 

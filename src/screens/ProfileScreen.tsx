@@ -1,8 +1,23 @@
-import React, { useEffect, useState } from 'react';
-import { Award, Check, Cloud, LogIn, LogOut, Palette, Settings2, Shield } from 'lucide-react';
+import React, { useEffect, useRef, useState } from 'react';
+import {
+  Award,
+  Camera,
+  Check,
+  Cloud,
+  LogIn,
+  LogOut,
+  Palette,
+  Settings2,
+  Shield,
+  UserPlus,
+} from 'lucide-react';
 import { useLuminoria } from '../context/LuminoriaContext';
 import { COLOR_SCHEME_PRESETS } from '../data/seedData';
 import { PROFILE_RANKS } from '../utils/luminoriaLogic';
+import {
+  compressAvatarFileToDataUrl,
+  STUDIO_AVATAR_PRESETS,
+} from '../utils/avatarUploadHelper';
 import { ProfileHeroCard } from '../components/profile/ProfileHeroCard';
 import { ProfileTimeline } from '../components/profile/ProfileTimeline';
 
@@ -18,6 +33,14 @@ const COUNTRIES = [
   { code: 'FR', name: 'França' },
 ];
 
+const MARITAL_OPTIONS = [
+  'Solteiro(a)',
+  'Namorando',
+  'Casado(a)',
+  'Noivo(a)',
+  'Maratonando 4K',
+];
+
 export const ProfileScreen: React.FC = () => {
   const {
     profile,
@@ -31,19 +54,24 @@ export const ProfileScreen: React.FC = () => {
     authError,
     loginWithGoogle,
     logoutFirebase,
+    setIsAuthModalOpen,
   } = useLuminoria();
 
-  const [showEditPanel, setShowEditPanel] = useState(false);
+  const [showEditPanel, setShowEditPanel] = useState(true);
   const [usernameInput, setUsernameInput] = useState(profile.username);
   const [bioInput, setBioInput] = useState(profile.bio);
   const [cityInput, setCityInput] = useState(profile.city || 'coimbra');
+  const [maritalInput, setMaritalInput] = useState(profile.maritalStatus || 'Solteiro(a)');
   const [savedBanner, setSavedBanner] = useState(false);
+
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   useEffect(() => {
     setUsernameInput(profile.username);
     setBioInput(profile.bio);
     setCityInput(profile.city || 'coimbra');
-  }, [profile.username, profile.bio, profile.city]);
+    setMaritalInput(profile.maritalStatus || 'Solteiro(a)');
+  }, [profile.username, profile.bio, profile.city, profile.maritalStatus]);
 
   const handleToggleGenre = (genre: string) => {
     const exists = profile.favoriteGenres.includes(genre);
@@ -58,12 +86,24 @@ export const ProfileScreen: React.FC = () => {
     }
   };
 
+  const handleAvatarUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    try {
+      const dataUrl = await compressAvatarFileToDataUrl(file);
+      updateProfileInfo({ avatarUrl: dataUrl });
+      setSavedBanner(true);
+      setTimeout(() => setSavedBanner(false), 2500);
+    } catch {}
+  };
+
   const handleSaveProfile = (e: React.FormEvent) => {
     e.preventDefault();
     updateProfileInfo({
       username: usernameInput.trim().slice(0, 40) || profile.username,
       bio: bioInput.trim().slice(0, 240),
       city: cityInput.trim().slice(0, 32) || 'coimbra',
+      maritalStatus: maritalInput,
     });
     setSavedBanner(true);
     setTimeout(() => setSavedBanner(false), 2500);
@@ -71,21 +111,18 @@ export const ProfileScreen: React.FC = () => {
 
   return (
     <div className="max-w-4xl mx-auto space-y-8 pb-24">
-      {/* Top Hero Profile Card (Exact Match to Screenshot 2) */}
+      {/* Top Hero Profile Card */}
       <ProfileHeroCard onToggleEditModal={() => setShowEditPanel((v) => !v)} />
 
-      {/* Vertical Watch History Timeline (Exact Match to Screenshot 1: | LINHA DO TEMPO) */}
-      <ProfileTimeline />
-
-      {/* Firebase Cloud Sync & Edit Toggle Bar */}
+      {/* Firebase Cloud Sync, Login/Cadastro & Edit Toggle Bar */}
       <section className="p-5 rounded-2xl bg-[#111118] border border-white/10 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div className="space-y-1">
           <div className="flex items-center gap-2 text-xs text-emerald-400">
             <Cloud className="w-4 h-4" />
             <span>
               {authUser
-                ? `Persistência Firestore Ativa · UID: ${authUser.uid.slice(0, 10)}...`
-                : 'Firebase Firestore Provisionado · Sincronize Perfil, Ranking e Alertas'}
+                ? `Persistência Firestore Ativa · ${profile.email} (UID: ${authUser.uid.slice(0, 8)}...)`
+                : `Conta Ativa: ${profile.username} (${profile.email}) · Sincronia Cloud & Local`}
             </span>
           </div>
           {authError && <p className="text-xs text-rose-400 font-mono">{authError}</p>}
@@ -95,17 +132,26 @@ export const ProfileScreen: React.FC = () => {
           <button
             type="button"
             onClick={() => setShowEditPanel((v) => !v)}
-            className="px-3.5 py-2 rounded-lg bg-white/10 hover:bg-white/15 text-xs font-semibold text-white flex items-center gap-1.5 transition-colors"
+            className="px-3.5 py-2 rounded-lg bg-white/10 hover:bg-white/15 text-xs font-semibold text-white flex items-center gap-1.5 transition-colors cursor-pointer"
           >
             <Settings2 className="w-3.5 h-3.5 text-[#00E5FF]" />
-            <span>{showEditPanel ? 'Ocultar Editor' : 'Editar Perfil & Temas'}</span>
+            <span>{showEditPanel ? 'Ocultar Editor' : 'Editar Perfil & Foto'}</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setIsAuthModalOpen(true)}
+            className="px-3.5 py-2 rounded-lg bg-[#E91E8C] hover:bg-[#D81B60] text-xs font-bold text-white flex items-center gap-1.5 transition-colors cursor-pointer"
+          >
+            <UserPlus className="w-3.5 h-3.5" />
+            <span>Login / Criar Conta</span>
           </button>
 
           {authUser ? (
             <button
               type="button"
               onClick={logoutFirebase}
-              className="px-4 py-2 rounded-lg bg-white/10 hover:bg-white/15 text-xs font-semibold text-white flex items-center gap-2"
+              className="px-4 py-2 rounded-lg bg-white/10 hover:bg-white/15 text-xs font-semibold text-white flex items-center gap-2 cursor-pointer"
             >
               <LogOut className="w-3.5 h-3.5 text-rose-400" />
               <span>Sair ({isCloudSynced ? 'Sincronizado' : 'Online'})</span>
@@ -114,16 +160,16 @@ export const ProfileScreen: React.FC = () => {
             <button
               type="button"
               onClick={loginWithGoogle}
-              className="px-4 py-2 rounded-lg bg-white text-black hover:bg-white/90 text-xs font-semibold flex items-center gap-2"
+              className="px-4 py-2 rounded-lg bg-white text-black hover:bg-white/90 text-xs font-semibold flex items-center gap-2 cursor-pointer"
             >
               <LogIn className="w-3.5 h-3.5" />
-              <span>Entrar com Google (Firestore)</span>
+              <span>Google Auth</span>
             </button>
           )}
         </div>
       </section>
 
-      {/* Collapsible Profile Editor & ColorScheme Switcher */}
+      {/* Collapsible Profile Editor, Photo Upload & ColorScheme Switcher */}
       {showEditPanel && (
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           <form
@@ -132,17 +178,61 @@ export const ProfileScreen: React.FC = () => {
           >
             <div className="flex items-center justify-between">
               <h2 className="text-base font-bold font-display text-white">
-                Editar Perfil & Gêneros
+                Editar Perfil, Foto & Dados Reais
               </h2>
               {savedBanner && (
-                <span className="text-xs font-mono text-emerald-400">Salvo com sucesso!</span>
+                <span className="text-xs font-mono text-emerald-400 font-bold">
+                  ✓ Perfil atualizado!
+                </span>
               )}
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            {/* Profile Photo Upload + Presets */}
+            <div className="p-3.5 rounded-xl bg-[#09090D] border border-white/10 space-y-2.5">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-semibold text-white/80">
+                  Foto de Perfil (Upload ou Estúdio 4K)
+                </span>
+                <button
+                  type="button"
+                  onClick={() => fileInputRef.current?.click()}
+                  className="px-3 py-1.5 rounded-lg bg-cyan-500/20 hover:bg-cyan-500/30 border border-cyan-400/40 text-cyan-300 text-xs font-bold flex items-center gap-1.5 cursor-pointer"
+                >
+                  <Camera className="w-3.5 h-3.5" />
+                  <span>Enviar Foto</span>
+                </button>
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept="image/*"
+                  onChange={handleAvatarUpload}
+                  className="hidden"
+                />
+              </div>
+
+              <div className="flex items-center gap-2 overflow-x-auto pb-1">
+                {STUDIO_AVATAR_PRESETS.map((preset) => (
+                  <button
+                    key={preset.id}
+                    type="button"
+                    onClick={() => updateProfileInfo({ avatarUrl: preset.url })}
+                    className={`w-10 h-10 rounded-full overflow-hidden border-2 shrink-0 transition-transform cursor-pointer ${
+                      profile.avatarUrl === preset.url
+                        ? 'border-cyan-400 scale-105'
+                        : 'border-white/15 opacity-75 hover:opacity-100'
+                    }`}
+                    title={preset.label}
+                  >
+                    <img src={preset.url} alt={preset.label} className="w-full h-full object-cover" />
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div className="space-y-1">
                 <label htmlFor="profile-username" className="block text-xs text-[#A0A0B0]">
-                  Nome
+                  Nome de Exibição
                 </label>
                 <input
                   id="profile-username"
@@ -153,6 +243,26 @@ export const ProfileScreen: React.FC = () => {
                 />
               </div>
 
+              <div className="space-y-1">
+                <label htmlFor="profile-marital" className="block text-xs text-[#A0A0B0]">
+                  Status / Estado Civil
+                </label>
+                <select
+                  id="profile-marital"
+                  value={maritalInput}
+                  onChange={(e) => setMaritalInput(e.target.value)}
+                  className="w-full px-3 py-2 rounded-lg bg-[#09090D] border border-white/15 text-xs text-white"
+                >
+                  {MARITAL_OPTIONS.map((opt) => (
+                    <option key={opt} value={opt}>
+                      {opt}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div className="space-y-1">
                 <label htmlFor="profile-country" className="block text-xs text-[#A0A0B0]">
                   País
@@ -210,7 +320,7 @@ export const ProfileScreen: React.FC = () => {
                       key={genre}
                       type="button"
                       onClick={() => handleToggleGenre(genre)}
-                      className={`px-2.5 py-1 rounded-md text-xs font-medium ${
+                      className={`px-2.5 py-1 rounded-md text-xs font-medium cursor-pointer ${
                         active
                           ? 'bg-white text-black font-semibold'
                           : 'bg-[#09090D] text-[#A0A0B0] border border-white/10'
@@ -225,10 +335,10 @@ export const ProfileScreen: React.FC = () => {
 
             <button
               type="submit"
-              className="px-5 py-2 rounded-lg text-xs font-semibold text-white"
+              className="w-full sm:w-auto px-5 py-2.5 rounded-lg text-xs font-bold text-white cursor-pointer"
               style={{ backgroundColor: activeScheme.primaryHex }}
             >
-              Salvar Alterações
+              Salvar Alterações no Perfil
             </button>
           </form>
 
@@ -241,26 +351,46 @@ export const ProfileScreen: React.FC = () => {
             </div>
 
             <div className="grid grid-cols-2 gap-2.5">
-              {COLOR_SCHEME_PRESETS.map((scheme) => (
-                <button
-                  key={scheme.id}
-                  type="button"
-                  onClick={() => setSchemeById(scheme.id)}
-                  className={`p-3 rounded-xl border text-left flex items-center justify-between ${
-                    activeScheme.id === scheme.id
-                      ? 'bg-white/10 border-white text-white'
-                      : 'bg-[#09090D] border-white/10 text-[#A0A0B0]'
-                  }`}
-                >
-                  <span className="text-xs font-semibold text-white">{scheme.name}</span>
-                  <span
-                    className="w-5 h-5 rounded-full shrink-0"
-                    style={{
-                      backgroundImage: `linear-gradient(135deg, ${scheme.primaryHex}, ${scheme.secondaryHex})`,
-                    }}
-                  />
-                </button>
-              ))}
+              {COLOR_SCHEME_PRESETS.map((scheme) => {
+                const isSelected = activeScheme.id === scheme.id;
+                return (
+                  <button
+                    key={scheme.id}
+                    type="button"
+                    onClick={() => setSchemeById(scheme.id)}
+                    style={
+                      isSelected
+                        ? {
+                            borderColor: scheme.primaryHex,
+                            boxShadow: `0 0 16px ${scheme.primaryHex}55`,
+                            backgroundColor: `${scheme.primaryHex}18`,
+                          }
+                        : undefined
+                    }
+                    className={`p-3 rounded-xl border text-left flex items-center justify-between transition-all cursor-pointer ${
+                      isSelected
+                        ? 'text-white'
+                        : 'bg-[#09090D] border-white/10 text-[#A0A0B0] hover:border-white/30'
+                    }`}
+                  >
+                    <div className="flex items-center gap-2">
+                      {isSelected && (
+                        <Check
+                          className="w-3.5 h-3.5 shrink-0"
+                          style={{ color: scheme.primaryHex }}
+                        />
+                      )}
+                      <span className="text-xs font-semibold text-white">{scheme.name}</span>
+                    </div>
+                    <span
+                      className="w-5 h-5 rounded-full shrink-0 border border-white/20"
+                      style={{
+                        backgroundImage: `linear-gradient(135deg, ${scheme.primaryHex}, ${scheme.secondaryHex})`,
+                      }}
+                    />
+                  </button>
+                );
+              })}
             </div>
 
             <div className="pt-2 border-t border-white/10 space-y-2">
@@ -291,6 +421,9 @@ export const ProfileScreen: React.FC = () => {
           </div>
         </div>
       )}
+
+      {/* Vertical Watch History Timeline (| LINHA DO TEMPO) */}
+      <ProfileTimeline />
 
       {/* All 10 XP Patentes Ladder */}
       <section aria-labelledby="ranks-ladder-heading" className="space-y-4">

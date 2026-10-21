@@ -1,0 +1,6 @@
+<resources>
+    <string name="app_name">Luminoria Pro</string>
+    <string name="title_activity_main">Luminoria Pro</string>
+    <string name="package_name">com.luminoria.pro</string>
+    <string name="custom_url_scheme">com.luminoria.pro</string>
+</resources>

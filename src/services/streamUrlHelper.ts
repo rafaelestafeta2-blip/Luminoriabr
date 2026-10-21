@@ -1,21 +1,19 @@
 /**
- * Curated list of verified HTTP 200 HD cinema streams (MP4 H.264 + WebM VP9)
- * for instant browser playback when an item uses a demo placeholder or when an
- * external IPTV server blocks browser playback via Cloudflare ASN rules.
+ * Curated list of verified live HLS broadcast streams (Red Bull TV Live HD,
+ * Unified Streaming Tears of Steel Live Action Sci-Fi, Akamai Live HD)
+ * for live TV channels when an external IPTV channel is temporarily offline.
+ * Zero 1-minute cartoon demo clips.
  */
 export const REAL_HD_MP4_STREAMS = [
-  'https://media.w3.org/2010/05/sintel/trailer.mp4',
-  'https://media.w3.org/2010/05/bunny/movie.mp4',
-  'https://media.w3.org/2010/05/bunny/trailer.mp4',
-  'https://media.w3.org/2010/05/video/movie_300.mp4',
-  'https://www.w3schools.com/html/mov_bbb.mp4',
-  'https://interactive-examples.mdn.mozilla.net/media/cc0-videos/flower.mp4',
+  'https://rbmn-live.akamaized.net/hls/live/590964/BoRB-AT/master.m3u8',
+  'https://demo.unified-streaming.com/k8s/features/stable/video/tears-of-steel/tears-of-steel.ism/.m3u8',
+  'https://cph-p2p-msl.akamaized.net/hls/live/2000341/test/master.m3u8',
+  'https://demo.unified-streaming.com/k8s/live/stable/scte35.isml/.m3u8',
 ];
 
 export const REAL_HD_WEBM_STREAMS = [
-  'https://media.w3.org/2010/05/sintel/trailer.webm',
-  'https://media.w3.org/2010/05/video/movie_300.webm',
-  'https://interactive-examples.mdn.mozilla.net/media/cc0-videos/flower.webm',
+  'https://rbmn-live.akamaized.net/hls/live/590964/BoRB-AT/master.m3u8',
+  'https://demo.unified-streaming.com/k8s/features/stable/video/tears-of-steel/tears-of-steel.ism/.m3u8',
 ];
 
 /**
@@ -33,28 +31,32 @@ export function browserSupportsH264Mp4(): boolean {
 }
 
 /**
- * Picks a deterministic, verified HTTP 200 HD stream based on title or ID string.
+ * Picks a deterministic, verified live HLS stream based on title or ID string.
  */
 export function getDeterministicHdStream(seed: string = ''): string {
   let hash = 0;
   for (let i = 0; i < seed.length; i++) {
     hash = (hash * 31 + seed.charCodeAt(i)) >>> 0;
   }
-  const pool = browserSupportsH264Mp4() ? REAL_HD_MP4_STREAMS : REAL_HD_WEBM_STREAMS;
+  const pool = REAL_HD_MP4_STREAMS;
   return pool[hash % pool.length];
 }
 
 /**
- * Checks if a URL is a non-existent mock/demo placeholder domain or dead storage bucket.
+ * Checks if a URL is a non-existent mock/demo placeholder domain or 1-minute demo cartoon clip.
  */
 export function isPlaceholderStreamUrl(url?: string): boolean {
   if (!url || !url.trim()) return true;
   const lower = url.toLowerCase();
   return (
+    lower.startsWith('lumin://') ||
     lower.includes('luminoria.pro') ||
     lower.includes('example.com') ||
     lower.includes('placeholder') ||
-    lower.includes('commondatastorage.googleapis.com/gtv-videos-bucket')
+    lower.includes('commondatastorage.googleapis.com/gtv-videos-bucket') ||
+    lower.includes('media.w3.org') ||
+    lower.includes('w3schools.com') ||
+    lower.includes('interactive-examples.mdn')
   );
 }
 
@@ -105,31 +107,49 @@ export function convertTsToHlsUrl(rawUrl: string): string | null {
   return null;
 }
 
+export type DevicePlatform = 'ios' | 'android' | 'desktop';
+
+export function detectDevicePlatform(): DevicePlatform {
+  if (typeof navigator === 'undefined') return 'desktop';
+  const ua = navigator.userAgent || '';
+  const isIos =
+    /iPad|iPhone|iPod/.test(ua) ||
+    (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+  if (isIos) return 'ios';
+  if (/Android/i.test(ua)) return 'android';
+  return 'desktop';
+}
+
 export interface AndroidNativeIntentLinks {
-  /** Opens Android's built-in Native System Video Player (ExoPlayer / MediaCodec) */
   systemVideoPlayerIntent: string;
-  /** Opens VLC for Android directly */
   vlcIntent: string;
-  /** Opens MX Player directly */
   mxPlayerIntent: string;
-  /** Opens Web Video Caster for Android / Smart TV */
   webVideoCastIntent: string;
-  /** Clean direct stream URL */
   directUrl: string;
+  platform: DevicePlatform;
+  primaryNativeLabel: string;
+  primaryNativeUrl: string;
+  vlcUrl: string;
+  vlcLabel: string;
+  secondaryPlayerUrl: string;
+  secondaryPlayerLabel: string;
 }
 
 /**
- * Generates native Android `intent://` deep links so Chrome on Android launches
- * the built-in system hardware video player, VLC, or MX Player directly using
- * the user's residential/mobile connection (bypassing browser CORS & Cloudflare).
+ * Generates platform-aware native player deep links for iOS (AVPlayer, VLC iOS, Infuse),
+ * Android (MediaCodec ExoPlayer intent://, VLC Android, MX Player), and Desktop.
  */
-export function buildAndroidNativeIntentUrls(
+export function buildDeviceNativeStreamUrls(
   rawUrl?: string,
   title: string = 'Filme HD'
 ): AndroidNativeIntentLinks {
   const effectiveUrl = isPlaceholderStreamUrl(rawUrl)
     ? REAL_HD_MP4_STREAMS[0]
     : rawUrl!.trim();
+
+  const platform = detectDevicePlatform();
+  const encodedTitle = encodeURIComponent(title);
+  const encodedUrl = encodeURIComponent(effectiveUrl);
 
   try {
     const parsed = new URL(effectiveUrl);
@@ -138,14 +158,66 @@ export function buildAndroidNativeIntentUrls(
     const mimeType = effectiveUrl.includes('.m3u8')
       ? 'application/x-mpegURL'
       : 'video/mp4';
-    const encodedTitle = encodeURIComponent(title);
 
+    const androidSystemIntent = `intent://${hostAndPath}#Intent;scheme=${scheme};type=${mimeType};action=android.intent.action.VIEW;S.title=${encodedTitle};end`;
+    const androidVlcIntent = `intent://${hostAndPath}#Intent;scheme=${scheme};package=org.videolan.vlc;type=${mimeType};action=android.intent.action.VIEW;S.title=${encodedTitle};end`;
+    const androidMxIntent = `intent://${hostAndPath}#Intent;scheme=${scheme};package=com.mxtech.videoplayer.ad;type=${mimeType};action=android.intent.action.VIEW;S.title=${encodedTitle};end`;
+
+    // iOS schemes:
+    // 1. Direct stream in Safari triggers native iOS AVPlayer fullscreen with AirPlay & PiP
+    // 2. VLC for iOS: vlc-x-callback://x-callback-url/stream?url=...
+    // 3. Infuse iOS: infuse://x-callback-url/play?url=...
+    const iosVlc = `vlc-x-callback://x-callback-url/stream?url=${encodedUrl}`;
+    const iosInfuse = `infuse://x-callback-url/play?url=${encodedUrl}`;
+
+    if (platform === 'ios') {
+      return {
+        systemVideoPlayerIntent: effectiveUrl,
+        vlcIntent: iosVlc,
+        mxPlayerIntent: iosInfuse,
+        webVideoCastIntent: effectiveUrl,
+        directUrl: effectiveUrl,
+        platform: 'ios',
+        primaryNativeLabel: 'Player Nativo iPhone (AVPlayer)',
+        primaryNativeUrl: effectiveUrl,
+        vlcUrl: iosVlc,
+        vlcLabel: 'Abrir no VLC iPhone',
+        secondaryPlayerUrl: iosInfuse,
+        secondaryPlayerLabel: 'Abrir no Infuse iOS',
+      };
+    }
+
+    if (platform === 'android') {
+      return {
+        systemVideoPlayerIntent: androidSystemIntent,
+        vlcIntent: androidVlcIntent,
+        mxPlayerIntent: androidMxIntent,
+        webVideoCastIntent: `wvc-x-callback://open?url=${encodedUrl}&title=${encodedTitle}`,
+        directUrl: effectiveUrl,
+        platform: 'android',
+        primaryNativeLabel: 'Player Nativo Android',
+        primaryNativeUrl: androidSystemIntent,
+        vlcUrl: androidVlcIntent,
+        vlcLabel: 'Abrir no VLC Android',
+        secondaryPlayerUrl: androidMxIntent,
+        secondaryPlayerLabel: 'Abrir no MX Player',
+      };
+    }
+
+    // Desktop / other
     return {
-      systemVideoPlayerIntent: `intent://${hostAndPath}#Intent;scheme=${scheme};type=${mimeType};action=android.intent.action.VIEW;S.title=${encodedTitle};end`,
-      vlcIntent: `intent://${hostAndPath}#Intent;scheme=${scheme};package=org.videolan.vlc;type=${mimeType};action=android.intent.action.VIEW;S.title=${encodedTitle};end`,
-      mxPlayerIntent: `intent://${hostAndPath}#Intent;scheme=${scheme};package=com.mxtech.videoplayer.ad;type=${mimeType};action=android.intent.action.VIEW;S.title=${encodedTitle};end`,
-      webVideoCastIntent: `wvc-x-callback://open?url=${encodeURIComponent(effectiveUrl)}&title=${encodedTitle}`,
+      systemVideoPlayerIntent: effectiveUrl,
+      vlcIntent: `vlc://${effectiveUrl.replace(/^https?:\/\//i, '')}`,
+      mxPlayerIntent: effectiveUrl,
+      webVideoCastIntent: effectiveUrl,
       directUrl: effectiveUrl,
+      platform: 'desktop',
+      primaryNativeLabel: 'Player Nativo do Sistema',
+      primaryNativeUrl: effectiveUrl,
+      vlcUrl: `vlc://${effectiveUrl.replace(/^https?:\/\//i, '')}`,
+      vlcLabel: 'Abrir no VLC',
+      secondaryPlayerUrl: effectiveUrl,
+      secondaryPlayerLabel: 'Abrir Stream Direto',
     };
   } catch {
     return {
@@ -154,6 +226,16 @@ export function buildAndroidNativeIntentUrls(
       mxPlayerIntent: effectiveUrl,
       webVideoCastIntent: effectiveUrl,
       directUrl: effectiveUrl,
+      platform,
+      primaryNativeLabel: platform === 'ios' ? 'Player Nativo iPhone' : 'Player Nativo',
+      primaryNativeUrl: effectiveUrl,
+      vlcUrl: effectiveUrl,
+      vlcLabel: 'Abrir no VLC',
+      secondaryPlayerUrl: effectiveUrl,
+      secondaryPlayerLabel: 'Abrir Stream Direto',
     };
   }
 }
+
+/** Backwards compatibility alias for buildDeviceNativeStreamUrls */
+export const buildAndroidNativeIntentUrls = buildDeviceNativeStreamUrls;

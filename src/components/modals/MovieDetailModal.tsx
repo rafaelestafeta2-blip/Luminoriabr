@@ -21,7 +21,7 @@ interface MovieDetailModalProps {
 }
 
 export const MovieDetailModal: React.FC<MovieDetailModalProps> = ({ movie, onClose }) => {
-  const { favoriteIds, toggleFavorite, setActiveModalVod, setIsFriendsDrawerOpen } =
+  const { vodItems, favoriteIds, toggleFavorite, setActiveModalVod, setIsFriendsDrawerOpen } =
     useLuminoria();
   const [showTrailer, setShowTrailer] = useState(false);
 
@@ -30,8 +30,26 @@ export const MovieDetailModal: React.FC<MovieDetailModalProps> = ({ movie, onClo
   const isFav = favoriteIds.includes(movie.id);
   const trailerId = getFallbackYoutubeTrailerId(movie.title);
 
+  // Check if this TMDB movie exists in our M3U catalog
+  const matchedVod = vodItems.find(
+    (v) =>
+      v.tmdbId === movie.tmdbId ||
+      v.id === movie.id ||
+      v.title.toLowerCase().trim() === movie.title.toLowerCase().trim()
+  );
+  const hasM3uLink = Boolean(
+    matchedVod &&
+      matchedVod.streamUrl &&
+      !matchedVod.streamUrl.startsWith('lumin://') &&
+      !matchedVod.isComingSoon
+  );
+
   const handlePlay = () => {
-    setActiveModalVod(convertTmdbToVodItem(movie));
+    if (matchedVod) {
+      setActiveModalVod(matchedVod);
+    } else {
+      setActiveModalVod(convertTmdbToVodItem(movie, { isComingSoon: true }));
+    }
     onClose();
   };
 
@@ -150,10 +168,14 @@ export const MovieDetailModal: React.FC<MovieDetailModalProps> = ({ movie, onClo
             <button
               onClick={handlePlay}
               type="button"
-              className="flex-1 py-3 rounded-xl bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-black font-black text-sm flex items-center justify-center gap-2 shadow-[0_0_25px_rgba(6,182,212,0.4)] transition-all cursor-pointer"
+              className={`flex-1 py-3 rounded-xl font-black text-sm flex items-center justify-center gap-2 transition-all cursor-pointer ${
+                hasM3uLink
+                  ? 'bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-black shadow-[0_0_25px_rgba(6,182,212,0.4)]'
+                  : 'bg-gradient-to-r from-amber-400 to-amber-500 hover:from-amber-300 hover:to-amber-400 text-black shadow-[0_0_25px_rgba(245,158,11,0.35)]'
+              }`}
             >
               <Play className="w-5 h-5 fill-black text-black" />
-              <span>Assistir Filme</span>
+              <span>{hasM3uLink ? 'Assistir Filme' : 'Em Breve no M3U · Ver Prévia'}</span>
             </button>
 
             <button

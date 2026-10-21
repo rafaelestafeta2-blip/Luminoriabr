@@ -3,6 +3,7 @@ import { Calendar, Database, Loader2, Search } from 'lucide-react';
 import { useLuminoria } from '../context/LuminoriaContext';
 import { VodItem } from '../types/luminoria';
 import { searchFullServerCatalog } from '../services/tmdbEnrichClient';
+import { sortVodByYearDesc } from '../services/genreNormalizer';
 import { HomeTopBar } from '../components/home/HomeTopBar';
 import { HomeHeroFan } from '../components/home/HomeHeroFan';
 import { MoviePosterRow } from '../components/home/MoviePosterRow';
@@ -20,33 +21,52 @@ const MOVIE_CATEGORIES = [
   'ANIMAÇÃO',
   'DRAMA',
   'ROMANCE',
+  'DOCUMENTÁRIOS',
   'DISNEY+',
   'NETFLIX',
 ];
 
-const YEAR_FILTERS = ['Todos os Anos', '2025/2026', '2024', '2023', 'Clássicos (<2010)'];
+const YEAR_FILTERS = [
+  'Todos os Anos (2026 → Anteriores)',
+  '2026',
+  '2025',
+  '2024',
+  '2023',
+  '2022',
+  'Clássicos (≤2021)',
+];
 
 export const HomeScreen: React.FC = () => {
-  const { vodItems, favoriteIds, toggleFavorite, setActiveModalVod, serverCatalogStats } =
-    useLuminoria();
+  const {
+    vodItems,
+    favoriteIds,
+    toggleFavorite,
+    setActiveModalVod,
+    serverCatalogStats,
+    weeklyTop10,
+    refreshWeeklyTop10,
+  } = useLuminoria();
 
   const [selectedCategory, setSelectedCategory] = useState<string>('TODOS');
-  const [selectedYearFilter, setSelectedYearFilter] = useState<string>('Todos os Anos');
+  const [selectedYearFilter, setSelectedYearFilter] = useState<string>(
+    'Todos os Anos (2026 → Anteriores)'
+  );
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [showSearchInput, setShowSearchInput] = useState<boolean>(false);
   const [featuredIndex, setFeaturedIndex] = useState<number>(0);
   const [serverMovies, setServerMovies] = useState<VodItem[] | null>(null);
   const [isSearchingServer, setIsSearchingServer] = useState<boolean>(false);
 
-  // Strictly Movies only on HomeScreen
+  // Strictly Movies only on HomeScreen, sorted 2026 -> 2025 -> 2024 -> 2023...
   const moviesOnly = useMemo(
-    () => vodItems.filter((item) => item.mediaType !== 'series'),
+    () => sortVodByYearDesc(vodItems.filter((item) => item.mediaType !== 'series')),
     [vodItems]
   );
 
+  // Fetch from full 28,100-movie server catalog when searching OR when selecting a specific genre pill
   useEffect(() => {
     const q = searchQuery.trim();
-    if (q.length < 2) {
+    if (q.length < 2 && selectedCategory === 'TODOS') {
       setServerMovies(null);
       return;
     }
@@ -58,7 +78,8 @@ export const HomeScreen: React.FC = () => {
         q,
         type: 'movie',
         category: selectedCategory,
-        limit: 160,
+        offset: 0,
+        limit: 240,
       })
         .then((res) => {
           if (!cancelled && res?.movies) {
@@ -68,7 +89,7 @@ export const HomeScreen: React.FC = () => {
         .finally(() => {
           if (!cancelled) setIsSearchingServer(false);
         });
-    }, 250);
+    }, 200);
 
     return () => {
       cancelled = true;
@@ -76,13 +97,13 @@ export const HomeScreen: React.FC = () => {
     };
   }, [searchQuery, selectedCategory]);
 
-  const featuredMovie = moviesOnly[featuredIndex % moviesOnly.length] || moviesOnly[0];
+  const featuredMovie = moviesOnly[featuredIndex % Math.max(moviesOnly.length, 1)] || moviesOnly[0];
 
-  const matchesMovieCategory = (m: (typeof moviesOnly)[number], cat: string): boolean => {
+  const matchesMovieCategory = (m: VodItem, cat: string): boolean => {
     if (m.category === cat) return true;
     const rawCat = (m.rawCategoryName || '').toUpperCase();
     const tags = (m.cast || []).map((t) => t.toUpperCase());
-    if (cat === 'LANÇAMENTOS') return m.year >= 2024 || rawCat.includes('LANÇAMENTO');
+    if (cat === 'LANÇAMENTOS') return m.year >= 2025 || rawCat.includes('LANÇAMENTO');
     if (cat === 'TERROR')
       return rawCat.includes('TERROR') || tags.some((t) => t.includes('TERROR') || t.includes('HORROR'));
     if (cat === 'COMÉDIA')
@@ -95,53 +116,40 @@ export const HomeScreen: React.FC = () => {
       return rawCat.includes('ANIMAÇÃO') || rawCat.includes('ANIMES') || tags.some((t) => t.includes('ANIMAÇÃO'));
     if (cat === 'DRAMA') return rawCat.includes('DRAMA') || tags.some((t) => t.includes('DRAMA'));
     if (cat === 'ROMANCE') return rawCat.includes('ROMANCE') || tags.some((t) => t.includes('ROMANCE'));
+    if (cat === 'DOCUMENTÁRIOS') return rawCat.includes('DOC') || tags.some((t) => t.includes('DOC'));
     if (cat === 'NETFLIX') return rawCat.includes('NETFLIX') || tags.includes('NETFLIX');
     if (cat === 'DISNEY+') return rawCat.includes('DISNEY') || tags.includes('DISNEY+');
     return tags.includes(cat);
   };
 
-  const newReleases = useMemo(
-    () => moviesOnly.filter((m) => matchesMovieCategory(m, 'LANÇAMENTOS')),
-    [moviesOnly]
-  );
-  const actionMovies = useMemo(
-    () => moviesOnly.filter((m) => matchesMovieCategory(m, 'AÇÃO')),
-    [moviesOnly]
-  );
-  const comedyMovies = useMemo(
-    () => moviesOnly.filter((m) => matchesMovieCategory(m, 'COMÉDIA')),
-    [moviesOnly]
-  );
-  const terrorMovies = useMemo(
-    () => moviesOnly.filter((m) => matchesMovieCategory(m, 'TERROR')),
-    [moviesOnly]
-  );
-  const scifiMovies = useMemo(
-    () => moviesOnly.filter((m) => matchesMovieCategory(m, 'FICÇÃO CIENTÍFICA')),
-    [moviesOnly]
-  );
-  const warMovies = useMemo(
-    () => moviesOnly.filter((m) => matchesMovieCategory(m, 'GUERRA')),
-    [moviesOnly]
-  );
-  const adventureMovies = useMemo(
-    () => moviesOnly.filter((m) => matchesMovieCategory(m, 'AVENTURA')),
-    [moviesOnly]
-  );
-  const suspenseMovies = useMemo(
-    () => moviesOnly.filter((m) => matchesMovieCategory(m, 'SUSPENSE')),
-    [moviesOnly]
-  );
-  const animationMovies = useMemo(
-    () => moviesOnly.filter((m) => matchesMovieCategory(m, 'ANIMAÇÃO')),
-    [moviesOnly]
-  );
+  const getGenreMovies = (cat: string) =>
+    sortVodByYearDesc(moviesOnly.filter((m) => matchesMovieCategory(m, cat)));
+
+  const newReleases = useMemo(() => getGenreMovies('LANÇAMENTOS'), [moviesOnly]);
+  const actionMovies = useMemo(() => getGenreMovies('AÇÃO'), [moviesOnly]);
+  const comedyMovies = useMemo(() => getGenreMovies('COMÉDIA'), [moviesOnly]);
+  const terrorMovies = useMemo(() => getGenreMovies('TERROR'), [moviesOnly]);
+  const scifiMovies = useMemo(() => getGenreMovies('FICÇÃO CIENTÍFICA'), [moviesOnly]);
+  const warMovies = useMemo(() => getGenreMovies('GUERRA'), [moviesOnly]);
+  const adventureMovies = useMemo(() => getGenreMovies('AVENTURA'), [moviesOnly]);
+  const suspenseMovies = useMemo(() => getGenreMovies('SUSPENSE'), [moviesOnly]);
+  const animationMovies = useMemo(() => getGenreMovies('ANIMAÇÃO'), [moviesOnly]);
+  const dramaMovies = useMemo(() => getGenreMovies('DRAMA'), [moviesOnly]);
+  const romanceMovies = useMemo(() => getGenreMovies('ROMANCE'), [moviesOnly]);
+  const disneyMovies = useMemo(() => getGenreMovies('DISNEY+'), [moviesOnly]);
+  const netflixMovies = useMemo(() => getGenreMovies('NETFLIX'), [moviesOnly]);
 
   const filteredMovies = useMemo(() => {
-    const baseList =
-      serverMovies && searchQuery.trim().length >= 2 ? serverMovies : moviesOnly;
+    const mergedMap = new Map<string, VodItem>();
+    if (serverMovies) {
+      serverMovies.forEach((m) => mergedMap.set(m.id, m));
+    }
+    moviesOnly.forEach((m) => {
+      if (!mergedMap.has(m.id)) mergedMap.set(m.id, m);
+    });
+    const baseList = Array.from(mergedMap.values());
 
-    return baseList.filter((item) => {
+    const filtered = baseList.filter((item) => {
       const matchesSearch =
         !searchQuery.trim() ||
         item.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -152,25 +160,42 @@ export const HomeScreen: React.FC = () => {
         return false;
       }
 
-      if (selectedYearFilter === '2025/2026') return item.year >= 2025;
+      if (selectedYearFilter === '2026') return item.year >= 2026;
+      if (selectedYearFilter === '2025') return item.year === 2025;
       if (selectedYearFilter === '2024') return item.year === 2024;
       if (selectedYearFilter === '2023') return item.year === 2023;
-      if (selectedYearFilter === 'Clássicos (<2010)') return item.year < 2010;
+      if (selectedYearFilter === '2022') return item.year === 2022;
+      if (selectedYearFilter === 'Clássicos (≤2021)') return item.year <= 2021;
 
       return true;
     });
+
+    return sortVodByYearDesc(filtered);
   }, [moviesOnly, serverMovies, searchQuery, selectedCategory, selectedYearFilter]);
 
   const top10Movies = useMemo(() => {
-    return [...moviesOnly]
-      .sort((a, b) => (b.rating || 0) - (a.rating || 0))
+    if (weeklyTop10 && weeklyTop10.items.length >= 10) {
+      return weeklyTop10.items;
+    }
+    const firstNewReleaseIds = new Set(newReleases.slice(0, 5).map((m) => m.id));
+    const distinctPool = moviesOnly.filter(
+      (m) => !firstNewReleaseIds.has(m.id) && Boolean(m.posterUrl)
+    );
+    const source = distinctPool.length >= 10 ? distinctPool : moviesOnly;
+    return [...source]
+      .sort((a, b) => (b.year || 2025) - (a.year || 2025) || (b.rating || 0) - (a.rating || 0))
       .slice(0, 10)
       .map((m, idx) => ({ ...m, rankPosition: idx + 1 }));
-  }, [moviesOnly]);
+  }, [weeklyTop10, moviesOnly, newReleases]);
 
   const ultraHd4kMovies = useMemo(() => {
-    return [...moviesOnly].filter((m) => Boolean(m.posterUrl)).slice(0, 24);
+    return sortVodByYearDesc(moviesOnly.filter((m) => Boolean(m.posterUrl))).slice(0, 60);
   }, [moviesOnly]);
+
+  const isFilteredView =
+    selectedCategory !== 'TODOS' ||
+    selectedYearFilter !== 'Todos os Anos (2026 → Anteriores)' ||
+    searchQuery.trim().length > 0;
 
   return (
     <div className="space-y-8 pb-32">
@@ -180,7 +205,7 @@ export const HomeScreen: React.FC = () => {
         featuredMovieId={featuredMovie?.id}
       />
 
-      {/* Category Pills & Year Filter */}
+      {/* Category Pills & Chronological Year Filter */}
       <div className="space-y-3">
         <div className="flex items-center gap-1.5 overflow-x-auto pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
           {MOVIE_CATEGORIES.map((cat) => (
@@ -219,9 +244,9 @@ export const HomeScreen: React.FC = () => {
               </button>
             ))}
 
-            <span className="hidden md:inline-flex items-center gap-1.5 ml-3 text-[11px] font-mono text-white/55 tabular-nums">
+            <span className="hidden xl:inline-flex items-center gap-1.5 ml-3 text-[11px] font-mono text-white/55 tabular-nums">
               <Database className="w-3 h-3 text-cyan-400" />
-              {serverCatalogStats.totalMovies.toLocaleString('pt-BR')} filmes TMDB na lista oficial
+              {serverCatalogStats.totalMovies.toLocaleString('pt-BR')} filmes M3U · Sincronia TMDB Ativa
             </span>
           </div>
 
@@ -244,7 +269,7 @@ export const HomeScreen: React.FC = () => {
         </div>
       </div>
 
-      {/* 3D Fan Showcase */}
+      {/* Hero Fan Showcase */}
       <HomeHeroFan
         movies={filteredMovies.length > 0 ? filteredMovies : moviesOnly}
         featuredIndex={featuredIndex}
@@ -252,42 +277,61 @@ export const HomeScreen: React.FC = () => {
         onPlayMovie={setActiveModalVod}
       />
 
-      {/* Filtered view or Multi-Genre Rows */}
-      {selectedCategory !== 'TODOS' ||
-      selectedYearFilter !== 'Todos os Anos' ||
-      searchQuery.trim().length > 0 ? (
+      {/* Filtered view OR Complete Multi-Genre Catalog Rows with Infinite Scroll */}
+      {isFilteredView ? (
         <div className="space-y-6">
           <MoviePosterRow
-            title={`Catálogo Filtrado (${filteredMovies.length} Filmes Encontrados)`}
+            title={`Catálogo ${selectedCategory} (${filteredMovies.length} Filmes · 2026 → Anteriores)`}
             items={filteredMovies}
             favoriteIds={favoriteIds}
             onToggleFavorite={toggleFavorite}
             onSelectMovie={setActiveModalVod}
-            diagonalTilt
+            categoryKey={selectedCategory}
+            mediaType="movie"
           />
         </div>
       ) : (
         <div className="space-y-8">
           {newReleases.length > 0 && (
             <MoviePosterRow
-              title="Lançamentos Recentes (Sincronizados TMDB)"
+              title="Lançamentos & Estreias (2026 → 2025)"
               items={newReleases}
               favoriteIds={favoriteIds}
               onToggleFavorite={toggleFavorite}
               onSelectMovie={setActiveModalVod}
-              diagonalTilt
+              categoryKey="LANÇAMENTOS"
+              mediaType="movie"
             />
           )}
 
-          <MoviePosterRow
-            title="Top 10 Filmes da Semana"
-            items={top10Movies}
-            favoriteIds={favoriteIds}
-            onToggleFavorite={toggleFavorite}
-            onSelectMovie={setActiveModalVod}
-            showRankNumbers
-            diagonalTilt
-          />
+          <div className="space-y-1.5">
+            {weeklyTop10 && (
+              <div className="flex flex-wrap items-center justify-between gap-2 px-1">
+                <span className="text-xs font-sans text-zinc-400 tracking-wide flex items-center gap-1.5">
+                  <span className="text-amber-400 font-semibold">Em Alta nesta Semana</span>
+                  <span>•</span>
+                  <span>Atualizado semanalmente com os maiores lançamentos</span>
+                </span>
+                <button
+                  type="button"
+                  onClick={() => refreshWeeklyTop10(true)}
+                  className="text-xs font-sans font-semibold text-cyan-400 hover:text-cyan-300 transition-colors cursor-pointer"
+                >
+                  Atualizar Ranking
+                </button>
+              </div>
+            )}
+
+            <MoviePosterRow
+              title="🔥 Top 10 Filmes da Semana"
+              items={top10Movies}
+              favoriteIds={favoriteIds}
+              onToggleFavorite={toggleFavorite}
+              onSelectMovie={setActiveModalVod}
+              showRankNumbers
+              disableYearSort
+            />
+          </div>
 
           {actionMovies.length > 0 && (
             <MoviePosterRow
@@ -296,7 +340,8 @@ export const HomeScreen: React.FC = () => {
               favoriteIds={favoriteIds}
               onToggleFavorite={toggleFavorite}
               onSelectMovie={setActiveModalVod}
-              diagonalTilt
+              categoryKey="AÇÃO"
+              mediaType="movie"
             />
           )}
 
@@ -307,7 +352,8 @@ export const HomeScreen: React.FC = () => {
               favoriteIds={favoriteIds}
               onToggleFavorite={toggleFavorite}
               onSelectMovie={setActiveModalVod}
-              diagonalTilt
+              categoryKey="TERROR"
+              mediaType="movie"
             />
           )}
 
@@ -318,7 +364,8 @@ export const HomeScreen: React.FC = () => {
               favoriteIds={favoriteIds}
               onToggleFavorite={toggleFavorite}
               onSelectMovie={setActiveModalVod}
-              diagonalTilt
+              categoryKey="COMÉDIA"
+              mediaType="movie"
             />
           )}
 
@@ -329,18 +376,8 @@ export const HomeScreen: React.FC = () => {
               favoriteIds={favoriteIds}
               onToggleFavorite={toggleFavorite}
               onSelectMovie={setActiveModalVod}
-              diagonalTilt
-            />
-          )}
-
-          {warMovies.length > 0 && (
-            <MoviePosterRow
-              title="Filmes de Guerra & História"
-              items={warMovies}
-              favoriteIds={favoriteIds}
-              onToggleFavorite={toggleFavorite}
-              onSelectMovie={setActiveModalVod}
-              diagonalTilt
+              categoryKey="FICÇÃO CIENTÍFICA"
+              mediaType="movie"
             />
           )}
 
@@ -351,29 +388,92 @@ export const HomeScreen: React.FC = () => {
               favoriteIds={favoriteIds}
               onToggleFavorite={toggleFavorite}
               onSelectMovie={setActiveModalVod}
-              diagonalTilt
+              categoryKey="AVENTURA"
+              mediaType="movie"
             />
           )}
 
           {suspenseMovies.length > 0 && (
             <MoviePosterRow
-              title="Suspense & Mistério"
+              title="Suspense, Crime & Mistério"
               items={suspenseMovies}
               favoriteIds={favoriteIds}
               onToggleFavorite={toggleFavorite}
               onSelectMovie={setActiveModalVod}
-              diagonalTilt
+              categoryKey="SUSPENSE"
+              mediaType="movie"
+            />
+          )}
+
+          {warMovies.length > 0 && (
+            <MoviePosterRow
+              title="Filmes de Guerra & História"
+              items={warMovies}
+              favoriteIds={favoriteIds}
+              onToggleFavorite={toggleFavorite}
+              onSelectMovie={setActiveModalVod}
+              categoryKey="GUERRA"
+              mediaType="movie"
             />
           )}
 
           {animationMovies.length > 0 && (
             <MoviePosterRow
-              title="Animação & Desenhos"
+              title="Animação, Pixar & Família"
               items={animationMovies}
               favoriteIds={favoriteIds}
               onToggleFavorite={toggleFavorite}
               onSelectMovie={setActiveModalVod}
-              diagonalTilt
+              categoryKey="ANIMAÇÃO"
+              mediaType="movie"
+            />
+          )}
+
+          {dramaMovies.length > 0 && (
+            <MoviePosterRow
+              title="Dramas & Grandes Histórias"
+              items={dramaMovies}
+              favoriteIds={favoriteIds}
+              onToggleFavorite={toggleFavorite}
+              onSelectMovie={setActiveModalVod}
+              categoryKey="DRAMA"
+              mediaType="movie"
+            />
+          )}
+
+          {romanceMovies.length > 0 && (
+            <MoviePosterRow
+              title="Romance & Paixões"
+              items={romanceMovies}
+              favoriteIds={favoriteIds}
+              onToggleFavorite={toggleFavorite}
+              onSelectMovie={setActiveModalVod}
+              categoryKey="ROMANCE"
+              mediaType="movie"
+            />
+          )}
+
+          {netflixMovies.length > 0 && (
+            <MoviePosterRow
+              title="Destaques Netflix"
+              items={netflixMovies}
+              favoriteIds={favoriteIds}
+              onToggleFavorite={toggleFavorite}
+              onSelectMovie={setActiveModalVod}
+              categoryKey="NETFLIX"
+              mediaType="movie"
+            />
+          )}
+
+          {disneyMovies.length > 0 && (
+            <MoviePosterRow
+              title="Mundo Disney+ & Marvel"
+              items={disneyMovies}
+              favoriteIds={favoriteIds}
+              onToggleFavorite={toggleFavorite}
+              onSelectMovie={setActiveModalVod}
+              categoryKey="DISNEY+"
+              mediaType="movie"
             />
           )}
 
@@ -384,10 +484,12 @@ export const HomeScreen: React.FC = () => {
             onToggleFavorite={toggleFavorite}
             onSelectMovie={setActiveModalVod}
             show4kBadge
-            diagonalTilt
+            categoryKey="TODOS"
+            mediaType="movie"
           />
         </div>
       )}
     </div>
   );
 };
+

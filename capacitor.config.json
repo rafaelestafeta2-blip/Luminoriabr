@@ -1,0 +1,16 @@
+{
+  "appId": "com.luminoria.pro",
+  "appName": "Luminoria Pro",
+  "webDir": "dist",
+  "bundledWebRuntime": false,
+  "server": {
+    "androidScheme": "https",
+    "cleartext": true
+  },
+  "android": {
+    "allowMixedContent": true,
+    "captureInput": true,
+    "webContentsDebuggingEnabled": false,
+    "backgroundColor": "#050508"
+  }
+}

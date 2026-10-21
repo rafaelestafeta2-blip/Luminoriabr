@@ -94,7 +94,13 @@ export type ArtworkVariantKey =
   | 'aot_theme'
   | 'naruto_theme'
   | 'ryan_theme'
-  | 'fast_theme';
+  | 'fast_theme'
+  | 'dune_2'
+  | 'crimson_protocol'
+  | 'neon_valkyrie'
+  | 'emerald_dynasty'
+  | 'velvet_noir'
+  | (string & {});
 
 export interface SeriesEpisodeItem {
   id: string;
@@ -131,6 +137,8 @@ export interface VodItem {
   episodes?: SeriesEpisodeItem[];
   rankPosition?: number;
   watchProgress?: number;
+  isComingSoon?: boolean;
+  hasM3uStream?: boolean;
 }
 
 export interface SportsSlide {
@@ -187,20 +195,53 @@ export interface RankEntry {
   xp: number;
   equippedBorderId: string;
   avatarColor?: string;
+  avatarUrl?: string;
   isAdminCrown?: boolean;
+}
+
+export interface DirectChatMessage {
+  id: string;
+  fromMe: boolean;
+  text: string;
+  time: string;
+  status?: 'sent' | 'delivered' | 'read';
+  reaction?: string;
+  sharedMovieTitle?: string;
 }
 
 export interface FriendContact {
   id: string;
   username: string;
+  handle?: string;
   status: 'online' | 'watching' | 'offline';
   lastSeenLabel?: string;
+  lastSeenAt?: string;
+  isTyping?: boolean;
+  unreadCount?: number;
   isFavorite?: boolean;
+  isBlocked?: boolean;
   avatarColor?: string;
+  avatarUrl?: string;
   activity?: string;
+  bio?: string;
   countryCode: string;
   xp: number;
-  messages: { id: string; fromMe: boolean; text: string; time: string }[];
+  messages: DirectChatMessage[];
+}
+
+export interface FriendRequestItem {
+  id: string;
+  fromUserId: string;
+  fromHandle: string;
+  fromUsername: string;
+  fromAvatarUrl?: string;
+  fromCountryCode?: string;
+  toUserId: string;
+  toHandle: string;
+  toUsername: string;
+  status: 'pending' | 'accepted' | 'declined';
+  createdAtLabel: string;
+  createdAtIso?: string;
 }
 
 export interface TimelineEntry {
@@ -211,11 +252,13 @@ export interface TimelineEntry {
   timeAgo: string;
   artworkKey: ArtworkVariantKey;
   category: string;
+  watchPercent?: number;
 }
 
 export interface UserProfileState {
   userId: string;
   username: string;
+  handle?: string;
   email: string;
   bio: string;
   countryCode: string;
@@ -227,12 +270,15 @@ export interface UserProfileState {
   watchHours: number;
   watchedCount?: number;
   favoritesCount?: number;
+  avatarUrl?: string;
+  coverUrl?: string;
+  onlineStatus?: 'online' | 'watching' | 'busy';
   equippedBorderId: string;
   equippedThemeId: ColorSchemeId;
   ownedProductIds: string[];
 }
 
-export type NotificationType = 'epg_reminder' | 'cinema_invite';
+export type NotificationType = 'epg_reminder' | 'cinema_invite' | 'chat_message' | 'friend_request';
 
 export interface AppNotification {
   notificationId: string;
@@ -244,3 +290,15 @@ export interface AppNotification {
   read: boolean;
   createdAtLabel: string;
 }
+
+export interface WeeklyTop10State {
+  weekKey: string;
+  weekNumber: number;
+  year: number;
+  updatedAtIso: string;
+  nextRefreshIso: string;
+  daysUntilRefresh: number;
+  source: 'tmdb_weekly_api' | 'hybrid_catalog';
+  items: VodItem[];
+}
+

@@ -1,5 +1,5 @@
 import React from 'react';
-import { Bell, Play, Search, Trophy, Users } from 'lucide-react';
+import { Bell, Play, Search, Trophy, UserCheck, Users } from 'lucide-react';
 import { useLuminoria } from '../../context/LuminoriaContext';
 import { TmdbSyncBadge } from '../tmdb/TmdbSyncBadge';
 
@@ -16,6 +16,7 @@ export const HomeTopBar: React.FC<HomeTopBarProps> = ({
 }) => {
   const {
     activeScheme,
+    profile,
     friends,
     cinemaRoom,
     joinOrCreateCinemaRoom,
@@ -26,7 +27,11 @@ export const HomeTopBar: React.FC<HomeTopBarProps> = ({
     setIsTmdbSyncModalOpen,
     isSyncingTmdb,
     setShowIntro,
+    setIsAuthModalOpen,
   } = useLuminoria();
+
+  const activeFriends = friends.filter((f) => !f.isBlocked);
+  const unreadChats = activeFriends.reduce((acc, f) => acc + (f.unreadCount || 0), 0);
 
   return (
     <header className="flex flex-wrap items-center justify-between gap-3 pt-1">
@@ -47,15 +52,15 @@ export const HomeTopBar: React.FC<HomeTopBarProps> = ({
 
       {/* Top Action Row */}
       <div className="flex flex-wrap items-center gap-2">
-        {/* Replay Netflix Cinema 3D Intro Button */}
+        {/* Replay Cinema Intro Button */}
         <button
           type="button"
           onClick={() => setShowIntro(true)}
-          aria-label="Ver Abertura 3D Estilo Netflix"
+          aria-label="Ver Abertura Cinema Luminoria"
           className="min-h-[38px] px-3.5 py-1.5 rounded-full bg-rose-950/40 hover:bg-rose-900/60 border border-rose-500/40 text-xs font-bold text-rose-300 flex items-center gap-1.5 transition-colors cursor-pointer shadow-sm"
-          title="Assistir à abertura 3D espacial estilo Netflix com teia de filmes e som Ta-Dum"
+          title="Assistir à abertura leve e cinematográfica Luminoria com som Ta-Dum"
         >
-          <span>🎬 Intro Cinema 3D</span>
+          <span>🎬 Intro Cinema</span>
         </button>
 
         {/* TMDB Firestore Cache Indicator Badge */}
@@ -64,18 +69,23 @@ export const HomeTopBar: React.FC<HomeTopBarProps> = ({
           isSyncing={isSyncingTmdb}
         />
 
-        {/* Friends Drawer */}
+        {/* Friends Drawer with Unread Chat Badge */}
         <button
           type="button"
           onClick={() => setIsFriendsDrawerOpen(true)}
           aria-label="Abrir lista de amigos"
-          className="min-h-[38px] px-3.5 py-1.5 rounded-full bg-[#13151F] hover:bg-[#1C1F2E] border border-white/15 text-xs font-semibold text-white flex items-center gap-1.5 transition-colors cursor-pointer"
+          className="min-h-[38px] px-3.5 py-1.5 rounded-full bg-[#13151F] hover:bg-[#1C1F2E] border border-white/15 text-xs font-semibold text-white flex items-center gap-1.5 transition-colors cursor-pointer relative"
         >
           <Users className="w-3.5 h-3.5 text-[#E91E8C]" />
           <span>Amigos</span>
           <span className="font-mono text-[11px] text-[#0EA5E9] tabular-nums">
-            ({friends.length})
+            ({activeFriends.length})
           </span>
+          {unreadChats > 0 && (
+            <span className="px-1.5 py-0.5 rounded-full bg-[#E91E8C] text-[10px] font-extrabold text-white">
+              {unreadChats}
+            </span>
+          )}
         </button>
 
         {/* Ranking Drawer */}
@@ -103,6 +113,25 @@ export const HomeTopBar: React.FC<HomeTopBarProps> = ({
               ({unreadNotificationCount})
             </span>
           )}
+        </button>
+
+        {/* Account Login / Register Button */}
+        <button
+          type="button"
+          onClick={() => setIsAuthModalOpen(true)}
+          aria-label="Conta e Login"
+          className="min-h-[38px] pl-2 pr-3.5 py-1 rounded-full bg-[#13151F] hover:bg-[#1C1F2E] border border-cyan-500/35 text-xs font-bold text-white flex items-center gap-2 transition-colors cursor-pointer"
+        >
+          {profile.avatarUrl ? (
+            <img
+              src={profile.avatarUrl}
+              alt={profile.username}
+              className="w-6 h-6 rounded-full object-cover border border-cyan-400"
+            />
+          ) : (
+            <UserCheck className="w-3.5 h-3.5 text-cyan-400 ml-1" />
+          )}
+          <span className="max-w-[100px] truncate">{profile.username}</span>
         </button>
 
         {/* Cinema Room */}
@@ -135,3 +164,4 @@ export const HomeTopBar: React.FC<HomeTopBarProps> = ({
     </header>
   );
 };
+

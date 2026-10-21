@@ -13,6 +13,7 @@ export interface VideoPlayerProps {
   title: string;
   streamUrl: string;
   rawStreamUrl?: string;
+  youtubeTrailerId?: string;
   posterUrl?: string;
   backdropUrl?: string;
   category?: string;
@@ -21,5 +22,5 @@ export interface VideoPlayerProps {
   isAndroidNativeMode?: boolean;
   onToggleAndroidNativeMode?: () => void;
   onClose?: () => void;
-  onWatchProgress?: (seconds: number) => void;
+  onWatchProgress?: (seconds: number, durationSeconds?: number) => void;
 }

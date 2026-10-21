@@ -23,13 +23,20 @@ export const NotificationsDrawer: React.FC = () => {
     cinemaRoom,
     authUser,
     activeScheme,
+    setIsFriendsDrawerOpen,
   } = useLuminoria();
 
-  const [filterType, setFilterType] = useState<'all' | 'epg_reminder' | 'cinema_invite'>('all');
+  const [filterType, setFilterType] = useState<
+    'all' | 'epg_reminder' | 'cinema_invite' | 'chat_message'
+  >('all');
 
-  const filteredList = notifications.filter((n) =>
-    filterType === 'all' ? true : n.type === filterType
-  );
+  const filteredList = notifications.filter((n) => {
+    if (filterType === 'all') return true;
+    if (filterType === 'chat_message') {
+      return n.type === 'chat_message' || n.type === 'friend_request';
+    }
+    return n.type === filterType;
+  });
 
   const handleOpenNotificationTarget = (notif: AppNotification) => {
     markNotificationRead(notif.notificationId);
@@ -37,6 +44,8 @@ export const NotificationsDrawer: React.FC = () => {
     setIsNotificationsDrawerOpen(false);
     if (notif.type === 'cinema_invite') {
       joinOrCreateCinemaRoom(notif.targetId);
+    } else if (notif.type === 'chat_message' || notif.type === 'friend_request') {
+      setIsFriendsDrawerOpen(true);
     } else {
       setActiveNav('channels');
     }
@@ -69,6 +78,12 @@ export const NotificationsDrawer: React.FC = () => {
                 <span className="flex items-center gap-1.5 text-emerald-400">
                   <Tv className="w-3.5 h-3.5" />
                   <span>ALERTA EPG FAVORITO</span>
+                </span>
+              ) : activeToastNotification.type === 'chat_message' ||
+                activeToastNotification.type === 'friend_request' ? (
+                <span className="flex items-center gap-1.5 text-cyan-400">
+                  <Users className="w-3.5 h-3.5" />
+                  <span>CHAT & AMIGOS EM TEMPO REAL</span>
                 </span>
               ) : (
                 <span className="flex items-center gap-1.5 text-amber-400">
@@ -105,10 +120,13 @@ export const NotificationsDrawer: React.FC = () => {
             >
               {activeToastNotification.type === 'epg_reminder'
                 ? 'Sintonizar no Guia EPG'
+                : activeToastNotification.type === 'chat_message' ||
+                  activeToastNotification.type === 'friend_request'
+                ? 'Abrir Chat de Amigos'
                 : `Ir para Sala #${activeToastNotification.targetId}`}
             </button>
             <span className="text-[11px] font-mono text-[#A0A0B0]">
-              {authUser ? 'Salvo no Firestore' : 'Sessão Local'}
+              {authUser ? 'Salvo no Firestore' : 'Tempo Real Ativo'}
             </span>
           </div>
         </div>
@@ -154,7 +172,7 @@ export const NotificationsDrawer: React.FC = () => {
                   <button
                     type="button"
                     onClick={() => setFilterType('all')}
-                    className={`px-2.5 py-1 rounded text-xs font-medium ${
+                    className={`px-2 py-1 rounded text-xs font-medium ${
                       filterType === 'all' ? 'bg-white text-black font-semibold' : 'text-[#A0A0B0]'
                     }`}
                   >
@@ -162,19 +180,30 @@ export const NotificationsDrawer: React.FC = () => {
                   </button>
                   <button
                     type="button"
+                    onClick={() => setFilterType('chat_message')}
+                    className={`px-2 py-1 rounded text-xs font-medium ${
+                      filterType === 'chat_message'
+                        ? 'bg-white text-black font-semibold'
+                        : 'text-[#A0A0B0]'
+                    }`}
+                  >
+                    Chat
+                  </button>
+                  <button
+                    type="button"
                     onClick={() => setFilterType('epg_reminder')}
-                    className={`px-2.5 py-1 rounded text-xs font-medium ${
+                    className={`px-2 py-1 rounded text-xs font-medium ${
                       filterType === 'epg_reminder'
                         ? 'bg-white text-black font-semibold'
                         : 'text-[#A0A0B0]'
                     }`}
                   >
-                    Guia EPG
+                    EPG
                   </button>
                   <button
                     type="button"
                     onClick={() => setFilterType('cinema_invite')}
-                    className={`px-2.5 py-1 rounded text-xs font-medium ${
+                    className={`px-2 py-1 rounded text-xs font-medium ${
                       filterType === 'cinema_invite'
                         ? 'bg-white text-black font-semibold'
                         : 'text-[#A0A0B0]'
@@ -217,13 +246,22 @@ export const NotificationsDrawer: React.FC = () => {
                     <div className="flex items-center justify-between text-[11px] font-mono">
                       <span
                         className={`flex items-center gap-1.5 ${
-                          notif.type === 'epg_reminder' ? 'text-emerald-400' : 'text-amber-400'
+                          notif.type === 'epg_reminder'
+                            ? 'text-emerald-400'
+                            : notif.type === 'chat_message' || notif.type === 'friend_request'
+                            ? 'text-cyan-400'
+                            : 'text-amber-400'
                         }`}
                       >
                         {notif.type === 'epg_reminder' ? (
                           <>
                             <CalendarClock className="w-3.5 h-3.5" />
                             <span>PROGRAMA FAVORITO EPG</span>
+                          </>
+                        ) : notif.type === 'chat_message' || notif.type === 'friend_request' ? (
+                          <>
+                            <Users className="w-3.5 h-3.5" />
+                            <span>CHAT & AMIGOS</span>
                           </>
                         ) : (
                           <>
@@ -248,6 +286,8 @@ export const NotificationsDrawer: React.FC = () => {
                       >
                         {notif.type === 'epg_reminder'
                           ? 'Abrir Guia EPG'
+                          : notif.type === 'chat_message' || notif.type === 'friend_request'
+                          ? 'Responder no Chat'
                           : `Entrar na Sala #${notif.targetId}`}
                       </button>
 

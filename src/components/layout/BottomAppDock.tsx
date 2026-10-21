@@ -21,7 +21,7 @@ const DOCK_ITEMS: DockItem[] = [
 ];
 
 export const BottomAppDock: React.FC = () => {
-  const { activeNav, setActiveNav } = useLuminoria();
+  const { activeNav, setActiveNav, activeScheme } = useLuminoria();
 
   return (
     <nav
@@ -41,14 +41,24 @@ export const BottomAppDock: React.FC = () => {
               key={item.id}
               type="button"
               onClick={() => setActiveNav(item.targetNav)}
+              style={isActive ? { color: activeScheme.primaryHex } : undefined}
               className={`min-h-[44px] flex flex-col items-center justify-center py-1 rounded-lg transition-colors whitespace-nowrap shrink-0 ${
-                isActive ? 'text-[#0EA5E9]' : 'text-[#8E929F] hover:text-white'
+                isActive ? 'font-bold' : 'text-[#8E929F] hover:text-white'
               }`}
             >
               <Icon className="w-5 h-5 mb-0.5" />
               <span className="text-[10px] sm:text-[11px] font-medium tracking-tight whitespace-nowrap">
                 {item.label}
               </span>
+              {isActive && (
+                <span
+                  className="w-1.5 h-1 rounded-full mt-0.5 transition-all"
+                  style={{
+                    backgroundColor: activeScheme.primaryHex,
+                    boxShadow: `0 0 8px ${activeScheme.primaryHex}`,
+                  }}
+                />
+              )}
             </button>
           );
         })}

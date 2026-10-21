@@ -1,12 +1,9 @@
 import { TmdbApiResponse, TmdbMovieItem } from '../types/tmdb';
+import { INITIAL_TMDB_SEED_MOVIES } from '../data/tmdbSeed';
 
 const TMDB_BASE_URL = 'https://api.themoviedb.org/3';
 export const TMDB_IMAGE_BASE_500 = 'https://image.tmdb.org/t/p/w500';
 export const TMDB_IMAGE_BASE_ORIGINAL = 'https://image.tmdb.org/t/p/w1280';
-
-// Default public demonstration key for open TMDB read-only client queries
-// (Users can also supply their own key in the UI settings)
-const DEFAULT_TMDB_API_KEY = '3c85e28a554a9b44a491ef2ea4f58c79';
 
 const GENRE_MAP: Record<number, string> = {
   28: 'Ação',
@@ -47,7 +44,14 @@ export async function fetchTmdbMoviesFromApi(
   category: 'trending' | 'popular' | 'top_rated' | 'now_playing',
   customApiKey?: string
 ): Promise<TmdbMovieItem[]> {
-  const apiKey = customApiKey?.trim() || DEFAULT_TMDB_API_KEY;
+  const apiKey =
+    customApiKey?.trim() ||
+    (typeof import.meta !== 'undefined' && import.meta.env?.VITE_TMDB_API_KEY) ||
+    '';
+
+  if (!apiKey) {
+    return INITIAL_TMDB_SEED_MOVIES;
+  }
 
   let endpoint = `${TMDB_BASE_URL}/movie/popular?api_key=${apiKey}&language=pt-BR&page=1`;
   if (category === 'trending') {
@@ -60,7 +64,7 @@ export async function fetchTmdbMoviesFromApi(
 
   const response = await fetch(endpoint);
   if (!response.ok) {
-    throw new Error(`TMDB API HTTP error: ${response.status} ${response.statusText}`);
+    return INITIAL_TMDB_SEED_MOVIES;
   }
 
   const data: TmdbApiResponse = await response.json();
@@ -90,14 +94,23 @@ export async function searchTmdbMoviesFromApi(
   customApiKey?: string
 ): Promise<TmdbMovieItem[]> {
   if (!query.trim()) return [];
-  const apiKey = customApiKey?.trim() || DEFAULT_TMDB_API_KEY;
+  const apiKey =
+    customApiKey?.trim() ||
+    (typeof import.meta !== 'undefined' && import.meta.env?.VITE_TMDB_API_KEY) ||
+    '';
+
+  if (!apiKey) {
+    const q = query.trim().toLowerCase();
+    return INITIAL_TMDB_SEED_MOVIES.filter((m) => m.title.toLowerCase().includes(q));
+  }
+
   const endpoint = `${TMDB_BASE_URL}/search/movie?api_key=${apiKey}&language=pt-BR&query=${encodeURIComponent(
     query
   )}&page=1`;
 
   const response = await fetch(endpoint);
   if (!response.ok) {
-    throw new Error(`TMDB Search error: ${response.status}`);
+    return [];
   }
 
   const data: TmdbApiResponse = await response.json();

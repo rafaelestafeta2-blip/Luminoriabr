@@ -1,6 +1,10 @@
 import { fetchXtreamApiJson } from './m3uFetcher';
-import { normalizeGenreAndMetadata } from '../services/genreNormalizer';
-import { Channel, SeriesEpisodeItem, VodItem } from '../types/luminoria';
+import {
+  extractMediaReleaseYear,
+  normalizeGenreAndMetadata,
+  normalizeSeriesGenre,
+} from '../services/genreNormalizer';
+import { Channel, VodItem } from '../types/luminoria';
 
 interface CachedXtreamCatalog {
   timestamp: number;
@@ -13,7 +17,6 @@ interface CachedXtreamCatalog {
 }
 
 const catalogCache = new Map<string, CachedXtreamCatalog>();
-const detailsCache = new Map<string, any>();
 const CACHE_TTL_MS = 20 * 60 * 1000; // 20 minutes
 
 export function normalizeTmdbImageUrl(rawUrl?: string | null): string | undefined {
@@ -84,14 +87,15 @@ export async function getOrLoadXtreamCatalog(
 
   const allChannels: Channel[] = liveArray.map((item: any, idx: number) => {
     const groupName = liveCatMap.get(String(item.category_id)) || item.category_name || 'TV Ao Vivo';
-    const streamUrl = `${cleanHost}/live/${username}/${password}/${item.stream_id}.ts`;
+    const tsUrl = `${cleanHost}/live/${username}/${password}/${item.stream_id}.ts`;
+    const hlsUrl = `${cleanHost}/live/${username}/${password}/${item.stream_id}.m3u8`;
     return {
       id: `xt-live-${item.stream_id || idx}`,
       name: item.name || 'Canal Ao Vivo',
       epgId: item.epg_channel_id || item.name || `epg-${idx}`,
       groupName,
-      url: streamUrl,
-      sources: [streamUrl],
+      url: tsUrl,
+      sources: [tsUrl, hlsUrl],
       playlistId: `pl-xt-${username}`,
       logoUrl: normalizeTmdbImageUrl(item.stream_icon),
       artworkVariant: /esporte|sport|premier|jogo|futebol|ufc|combate/i.test(groupName + item.name)
@@ -116,24 +120,17 @@ export async function getOrLoadXtreamCatalog(
     };
   });
 
-  // Sort VOD by newest added + valid TMDB poster so fresh releases lead
-  const sortedVodRaw = [...vodArray].sort((a, b) => {
-    const aHasImg = a.stream_icon?.includes('tmdb.org') ? 1 : 0;
-    const bHasImg = b.stream_icon?.includes('tmdb.org') ? 1 : 0;
-    if (aHasImg !== bHasImg) return bHasImg - aHasImg;
-    return Number(b.added || 0) - Number(a.added || 0);
-  });
-
-  const allMovies: VodItem[] = sortedVodRaw.map((item: any, idx: number) => {
+  const mappedMovies: VodItem[] = vodArray.map((item: any, idx: number) => {
     const rawCat = vodCatMap.get(String(item.category_id)) || item.category_name || 'FILMES';
-    const meta = normalizeGenreAndMetadata(rawCat, item.name || item.title || '');
+    const rawTitle = item.name || item.title || 'Filme HD';
+    const meta = normalizeGenreAndMetadata(rawCat, rawTitle, item.year || item.releaseDate);
     const posterUrl = normalizeTmdbImageUrl(item.stream_icon);
     const ext = item.container_extension || 'mp4';
     return {
       id: `xt-vod-${item.stream_id || idx}`,
       xtreamStreamId: Number(item.stream_id) || undefined,
-      title: meta.cleanTitle || item.title || item.name || 'Filme HD',
-      year: meta.year || parseInt(item.year, 10) || 2024,
+      title: meta.cleanTitle || rawTitle,
+      year: meta.year,
       duration: '1h 58m',
       rating: Number(item.rating || 8.2) > 0 ? Number(Number(item.rating).toFixed(1)) : 8.2,
       category: meta.category,
@@ -141,26 +138,33 @@ export async function getOrLoadXtreamCatalog(
       mediaType: 'movie',
       synopsis:
         item.plot ||
-        `Assista a ${meta.cleanTitle || item.name} em alta definição (${rawCat}). Sincronizado com banco de dados TMDB.`,
+        `Assista a ${meta.cleanTitle || rawTitle} em alta definição (${rawCat}). Catálogo oficial M3U sincronizado com TMDB.`,
       director: rawCat || 'Cinema HD',
-      cast: [meta.category, rawCat, 'TMDB Sync'].filter(Boolean),
+      cast: [meta.category, rawCat, 'M3U Oficial'].filter(Boolean),
       streamUrl: `${cleanHost}/movie/${username}/${password}/${item.stream_id}.${ext}`,
       artworkKey: 'cyber_odyssey',
       posterUrl,
       backdropUrl: posterUrl,
+      hasM3uStream: true,
+      isComingSoon: false,
     };
   });
 
-  const sortedSeriesRaw = [...seriesArray].sort((a, b) => {
-    const aHasImg = a.cover?.includes('tmdb.org') ? 1 : 0;
-    const bHasImg = b.cover?.includes('tmdb.org') ? 1 : 0;
+  // Sort movies chronologically descending (2026 -> 2025 -> 2024 -> 2023...) and prioritize TMDB covers
+  const allMovies = mappedMovies.sort((a, b) => {
+    const aHasImg = a.posterUrl?.includes('tmdb.org') ? 1 : 0;
+    const bHasImg = b.posterUrl?.includes('tmdb.org') ? 1 : 0;
     if (aHasImg !== bHasImg) return bHasImg - aHasImg;
-    return Number(b.last_modified || 0) - Number(a.last_modified || 0);
+    if (b.year !== a.year) return b.year - a.year;
+    return (b.rating || 0) - (a.rating || 0);
   });
 
-  const allSeries: VodItem[] = sortedSeriesRaw.map((item: any, idx: number) => {
+  const mappedSeries: VodItem[] = seriesArray.map((item: any, idx: number) => {
     const rawCat = seriesCatMap.get(String(item.category_id)) || item.category_name || 'SÉRIES';
-    const meta = normalizeGenreAndMetadata(rawCat, item.name || item.title || '');
+    const rawTitle = item.name || item.title || 'Série HD';
+    const meta = normalizeGenreAndMetadata(rawCat, rawTitle, item.releaseDate || item.year);
+    const seriesGenre = normalizeSeriesGenre(rawCat, rawTitle, item.genre || '');
+    const year = extractMediaReleaseYear(rawTitle, rawCat, item.releaseDate || item.year);
     const posterUrl = normalizeTmdbImageUrl(item.cover);
     const rawBackdrop = Array.isArray(item.backdrop_path) ? item.backdrop_path[0] : item.backdrop_path;
     const backdropUrl = normalizeTmdbImageUrl(rawBackdrop) || posterUrl;
@@ -173,24 +177,35 @@ export async function getOrLoadXtreamCatalog(
     return {
       id: `xt-ser-${item.series_id || idx}`,
       xtreamSeriesId: Number(item.series_id) || undefined,
-      title: meta.cleanTitle || item.title || item.name || 'Série HD',
-      year: meta.year || parseInt(String(item.releaseDate || item.year || '2024').slice(0, 4), 10) || 2024,
+      title: meta.cleanTitle || rawTitle,
+      year,
       duration: 'Temporadas Completas',
       rating: Number(item.rating || 8.5) > 0 ? Number(Number(item.rating).toFixed(1)) : 8.5,
-      category: rawCat.toUpperCase(),
+      category: seriesGenre,
       rawCategoryName: rawCat,
       mediaType: 'series',
-      synopsis: item.plot || `Série completa disponível no catálogo (${rawCat}).`,
+      synopsis: item.plot || `Série completa disponível no catálogo (${rawCat} · ${seriesGenre}).`,
       director: item.director || rawCat || 'Série Original',
-      cast: actors.length > 0 ? actors : [item.genre || rawCat, 'Série Completa'],
+      cast: actors.length > 0 ? actors : [seriesGenre, rawCat, item.genre || 'Série Completa'].filter(Boolean),
       actorsList: actors,
       youtubeTrailerId: extractYoutubeId(item.youtube_trailer),
       streamUrl: `${cleanHost}/series/${username}/${password}/${item.series_id}.mp4`,
       artworkKey: 'tulsa_king',
       posterUrl,
       backdropUrl,
+      hasM3uStream: true,
+      isComingSoon: false,
     };
   });
+
+  const allSeries = mappedSeries.sort((a, b) => {
+    const aHasImg = a.posterUrl?.includes('tmdb.org') ? 1 : 0;
+    const bHasImg = b.posterUrl?.includes('tmdb.org') ? 1 : 0;
+    if (aHasImg !== bHasImg) return bHasImg - aHasImg;
+    if (b.year !== a.year) return b.year - a.year;
+    return (b.rating || 0) - (a.rating || 0);
+  });
+
 
   // Total M3U_PLUS streams (Live + Movies + Series Episodes = 302,408 on elitedns.xyz)
   const totalStreamsCount =

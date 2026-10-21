@@ -40,80 +40,141 @@ export const LiveTvPlayerViewport: React.FC<LiveTvPlayerViewportProps> = ({
 
   const destroyEngines = () => {
     if (hlsRef.current) {
-      hlsRef.current.destroy();
+      try {
+        hlsRef.current.stopLoad();
+        hlsRef.current.detachMedia();
+        hlsRef.current.destroy();
+      } catch {}
       hlsRef.current = null;
     }
     if (mpegtsRef.current) {
       try {
+        mpegtsRef.current.pause();
         mpegtsRef.current.unload();
         mpegtsRef.current.detachMediaElement();
         mpegtsRef.current.destroy();
       } catch {}
       mpegtsRef.current = null;
     }
+    if (videoRef.current) {
+      try {
+        videoRef.current.pause();
+        videoRef.current.removeAttribute('src');
+        videoRef.current.load();
+      } catch {}
+    }
   };
 
   useEffect(() => {
     setHasError(false);
     setIsBuffering(true);
-    setCurrentSrc(resolveSafeStreamUrl(rawUrl, channel.name));
+    // Prefer HLS (.m3u8) over raw .ts when available on Xtream servers to avoid MSE worker freezes
+    const preferredRaw =
+      rawUrl && rawUrl.endsWith('.ts') && rawUrl.includes('/live/')
+        ? rawUrl.replace(/\.ts$/i, '.m3u8')
+        : rawUrl;
+    setCurrentSrc(resolveSafeStreamUrl(preferredRaw, channel.name));
   }, [rawUrl, channel.name]);
 
   useEffect(() => {
     const video = videoRef.current;
     if (!video || !currentSrc) return;
 
+    let cancelled = false;
     destroyEngines();
     setIsBuffering(true);
 
     const attemptPlay = () => {
-      if (!videoRef.current) return;
+      if (cancelled || !videoRef.current) return;
       videoRef.current
         .play()
-        .then(() => setIsBuffering(false))
+        .then(() => {
+          if (!cancelled) setIsBuffering(false);
+        })
         .catch(() => {
-          if (!videoRef.current) return;
+          if (cancelled || !videoRef.current) return;
           videoRef.current.muted = true;
           setIsMuted(true);
           videoRef.current
             .play()
-            .then(() => setIsBuffering(false))
-            .catch(() => setIsBuffering(false));
+            .then(() => {
+              if (!cancelled) setIsBuffering(false);
+            })
+            .catch(() => {
+              if (!cancelled) setIsBuffering(false);
+            });
         });
     };
 
     const lower = currentSrc.toLowerCase();
     const isHls = lower.includes('.m3u8');
-    const isTs = lower.endsWith('.ts') || lower.includes('.ts') || rawUrl.endsWith('.ts');
-    const isProxyStream = currentSrc.startsWith('/api/stream-proxy');
+    const isTs = lower.endsWith('.ts') || lower.includes('.ts?');
 
-    if (isHls && Hls.isSupported()) {
-      const hls = new Hls({ enableWorker: true, lowLatencyMode: true });
-      hlsRef.current = hls;
-      hls.loadSource(currentSrc);
-      hls.attachMedia(video);
-      hls.on(Hls.Events.MANIFEST_PARSED, () => attemptPlay());
-      hls.on(Hls.Events.ERROR, (_, data) => {
-        if (data.fatal) handleVideoError();
-      });
-    } else if ((isTs || isProxyStream) && mpegts.isSupported()) {
-      const player = mpegts.createPlayer({
-        type: 'mpegts',
-        isLive: true,
-        url: currentSrc,
-      });
-      mpegtsRef.current = player;
-      player.attachMediaElement(video);
-      player.load();
-      attemptPlay();
-      player.on(mpegts.Events.ERROR, () => handleVideoError());
-    } else {
-      video.src = currentSrc;
-      video.load();
-      attemptPlay();
+    try {
+      if (isHls && Hls.isSupported()) {
+        const hls = new Hls({
+          enableWorker: true,
+          lowLatencyMode: true,
+          backBufferLength: 30,
+          maxBufferLength: 15,
+        });
+        hlsRef.current = hls;
+        hls.loadSource(currentSrc);
+        hls.attachMedia(video);
+        hls.on(Hls.Events.MANIFEST_PARSED, () => attemptPlay());
+        hls.on(Hls.Events.ERROR, (_, data) => {
+          if (cancelled) return;
+          if (data.fatal) {
+            handleVideoError();
+          }
+        });
+      } else if (isTs && mpegts.isSupported()) {
+        const player = mpegts.createPlayer(
+          {
+            type: 'mpegts',
+            isLive: true,
+            url: currentSrc,
+            cors: true,
+          },
+          {
+            enableWorker: false, // Prevents worker thread deadlock on rapid channel switching
+            enableStashBuffer: false,
+            stashInitialSize: 128,
+          }
+        );
+        mpegtsRef.current = player;
+        player.attachMediaElement(video);
+        player.load();
+        attemptPlay();
+        player.on(mpegts.Events.ERROR, () => {
+          if (!cancelled) handleVideoError();
+        });
+      } else {
+        video.src = currentSrc;
+        video.load();
+        attemptPlay();
+      }
+    } catch {
+      if (!cancelled) handleVideoError();
     }
 
-    return () => destroyEngines();
+    // Watchdog: if live stream stalls >7s without decoding frames, switch safely to backup signal
+    const watchdog = setTimeout(() => {
+      if (
+        !cancelled &&
+        videoRef.current &&
+        videoRef.current.readyState < 2 &&
+        currentSrc.startsWith('/api/stream-proxy')
+      ) {
+        handleVideoError();
+      }
+    }, 7000);
+
+    return () => {
+      cancelled = true;
+      clearTimeout(watchdog);
+      destroyEngines();
+    };
   }, [currentSrc]);
 
   const handleVideoError = () => {
@@ -189,11 +250,13 @@ export const LiveTvPlayerViewport: React.FC<LiveTvPlayerViewportProps> = ({
 
           <div className="flex items-center gap-1.5">
             <a
-              href={androidIntents.systemVideoPlayerIntent}
+              href={androidIntents.primaryNativeUrl}
+              target={androidIntents.platform === 'ios' ? '_blank' : undefined}
+              rel={androidIntents.platform === 'ios' ? 'noopener noreferrer' : undefined}
               className="px-3 py-1 rounded-lg bg-emerald-500/90 hover:bg-emerald-400 text-black text-xs font-bold flex items-center gap-1.5 shadow-md transition-colors"
             >
               <Smartphone className="w-3.5 h-3.5" />
-              <span>Player Nativo Android</span>
+              <span>{androidIntents.primaryNativeLabel}</span>
             </a>
 
             {channel.sources.map((_, idx) => (

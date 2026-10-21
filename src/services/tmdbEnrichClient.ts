@@ -1,6 +1,20 @@
 import type { Channel, SeriesEpisodeItem, VodItem } from '../types/luminoria.ts';
 
 const FALLBACK_TRAILERS: Record<string, string> = {
+  'gladiador ii': '4rgYUipGJNo',
+  'gladiador 2': '4rgYUipGJNo',
+  'venom: a última rodada': '__2bjWbetsA',
+  'venom': '__2bjWbetsA',
+  'robô selvagem': '67vbA5ZJdKQ',
+  'coringa: delírio a dois': '_OKAwz2MsJs',
+  'coringa': '_OKAwz2MsJs',
+  'sorria 2': '0HY6QFlBzUY',
+  'os fantasmas ainda se divertem': 'CoZqL9N6Rx4',
+  'transformers: o início': 'u2NuUWuwPCM',
+  'transformers': 'u2NuUWuwPCM',
+  'a substância': 'LNlrGhBpYjc',
+  'duna: parte dois': 'Way9Dexny3w',
+  'duna': 'Way9Dexny3w',
   'capital humano': 'PJn01e2Qs00',
   'contra o relógio': '6ZfuNTqbHE8',
   'homem-aranha: um novo dia': 'JfVOs4VSpmA',
@@ -9,7 +23,7 @@ const FALLBACK_TRAILERS: Record<string, string> = {
   'controle absoluto': '8hP9D6kZseM',
   'tulsa king': 'aaQSScwZPbA',
   'reacher': 'GSycMV-_Csw',
-  'origem (2022)': 'pDHqAj4eJcM',
+  'origem': 'pDHqAj4eJcM',
   'the boys': 'M1bhOaLV4FU',
   'breaking bad': 'HhesaQXLuRY',
   'arcane': 'fXmAurh012s',
@@ -20,7 +34,7 @@ export function getFallbackYoutubeTrailerId(title: string): string {
   for (const [k, v] of Object.entries(FALLBACK_TRAILERS)) {
     if (key.includes(k)) return v;
   }
-  return 'JfVOs4VSpmA'; // Official Cinema HD Trailer fallback
+  return '4rgYUipGJNo'; // Official Cinema 4K Trailer fallback
 }
 
 export interface FullXtreamSyncResponse {
@@ -123,16 +137,21 @@ export async function searchFullServerCatalog(params: {
   q?: string;
   type?: 'all' | 'movie' | 'series' | 'live';
   category?: string;
+  offset?: number;
   limit?: number;
 }): Promise<{
   movies: VodItem[];
   series: VodItem[];
   channels: Channel[];
+  hasMoreMovies?: boolean;
+  hasMoreSeries?: boolean;
   totals?: {
     totalMovies: number;
     totalSeries: number;
     totalChannels: number;
     totalStreams: number;
+    matchedMovies?: number;
+    matchedSeries?: number;
   };
 } | null> {
   try {
@@ -140,6 +159,7 @@ export async function searchFullServerCatalog(params: {
       q: params.q || '',
       type: params.type || 'all',
       category: params.category || 'TODOS',
+      offset: String(params.offset || 0),
       limit: String(params.limit || 120),
     });
     const res = await fetch(`/api/xtream-search?${sp.toString()}`);
@@ -149,3 +169,4 @@ export async function searchFullServerCatalog(params: {
   } catch {}
   return null;
 }
+

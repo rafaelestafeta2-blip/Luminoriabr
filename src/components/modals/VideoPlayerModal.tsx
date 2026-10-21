@@ -6,6 +6,7 @@ import { enrichVodWithTmdbDetails } from '../../services/tmdbEnrichClient';
 import { NativeVideoPlayer } from '../player/NativeVideoPlayer';
 import { AndroidNativePlayerBar } from '../player/AndroidNativePlayerBar';
 import { VodTrailerAndCastSection } from './VodTrailerAndCastSection';
+import { ComingSoonPreviewBanner } from './ComingSoonPreviewBanner';
 
 export const VideoPlayerModal: React.FC = () => {
   const {
@@ -17,6 +18,7 @@ export const VideoPlayerModal: React.FC = () => {
     awardWatchSession,
     vodReviews,
     addVodReview,
+    addTimelineActivity,
   } = useLuminoria();
 
   const overlayRef = useRef<HTMLDivElement>(null);
@@ -67,14 +69,28 @@ export const VideoPlayerModal: React.FC = () => {
     const onKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Escape') setActiveModalVod(null);
     };
+    const onTvRemoteBack = () => {
+      setActiveModalVod(null);
+    };
+
     window.addEventListener('keydown', onKeyDown);
-    return () => window.removeEventListener('keydown', onKeyDown);
+    window.addEventListener('tv-remote-back', onTvRemoteBack);
+    return () => {
+      window.removeEventListener('keydown', onKeyDown);
+      window.removeEventListener('tv-remote-back', onTvRemoteBack);
+    };
   }, [activeModalVod, setActiveModalVod]);
 
   if (!activeModalVod) return null;
 
   const displayVod = enrichedVod || activeModalVod;
-  const activeStreamUrl = activeEpisode?.streamUrl || displayVod.streamUrl;
+  const activeStreamUrl = activeEpisode?.streamUrl || displayVod.streamUrl || '';
+  const isComingSoonNoStream = Boolean(
+    displayVod.isComingSoon ||
+      !activeStreamUrl ||
+      activeStreamUrl.startsWith('lumin://') ||
+      (displayVod.hasM3uStream === false && !activeEpisode?.streamUrl)
+  );
   const activePlayerTitle = activeEpisode
     ? `${displayVod.title} — T${activeEpisode.seasonNumber}:E${activeEpisode.episodeNumber}`
     : displayVod.title;
@@ -82,9 +98,19 @@ export const VideoPlayerModal: React.FC = () => {
   const isFav = favoriteIds.includes(displayVod.id);
   const reviews = vodReviews[displayVod.id] || [];
 
-  const handleWatchProgress = (seconds: number) => {
-    if (seconds > 5 && !rewarded) {
+  const handleWatchProgress = (seconds: number, durationSeconds: number = 120) => {
+    const effectiveDur = durationSeconds > 0 ? durationSeconds : 120;
+    const pct = Math.min(100, Math.round((seconds / effectiveDur) * 100));
+    if (pct >= 20 && !rewarded) {
       awardWatchSession(120, 25);
+      addTimelineActivity({
+        vodId: displayVod.id,
+        title: activePlayerTitle,
+        year: displayVod.year,
+        artworkKey: displayVod.artworkKey,
+        category: displayVod.category,
+        watchPercent: pct,
+      });
       setRewarded(true);
     }
   };
@@ -131,6 +157,11 @@ export const VideoPlayerModal: React.FC = () => {
             <span className="text-xs font-semibold text-white/90 truncate">
               {activePlayerTitle}
             </span>
+            {isComingSoonNoStream && (
+              <span className="px-2 py-0.5 rounded-md bg-amber-500/20 border border-amber-400/40 text-amber-300 text-[10px] font-black uppercase tracking-wider">
+                Em Breve no M3U
+              </span>
+            )}
           </div>
 
           <button
@@ -143,12 +174,13 @@ export const VideoPlayerModal: React.FC = () => {
           </button>
         </div>
 
-        {/* Native / Cinema Pro Video Player (100% Visible Above the Fold) */}
+        {/* Native / Cinema Pro Video Player with M3U + Official TMDB Trailer Support */}
         <div className="relative w-full bg-black">
           <NativeVideoPlayer
             title={activePlayerTitle}
             streamUrl={activeStreamUrl}
             rawStreamUrl={activeStreamUrl}
+            youtubeTrailerId={displayVod.youtubeTrailerId}
             posterUrl={displayVod.posterUrl}
             backdropUrl={displayVod.backdropUrl}
             category={displayVod.category}
@@ -163,12 +195,14 @@ export const VideoPlayerModal: React.FC = () => {
 
         {/* Modal Content: Android Native Player Bar, TMDB Info, Cast, Trailer, Episodes & Reviews */}
         <div className="p-4 sm:p-7 space-y-5">
-          <AndroidNativePlayerBar
-            streamUrl={activeStreamUrl}
-            title={activePlayerTitle}
-            isAndroidNativeMode={isAndroidNativeMode}
-            onToggleAndroidNativeMode={() => setIsAndroidNativeMode((v) => !v)}
-          />
+          {!isComingSoonNoStream && (
+            <AndroidNativePlayerBar
+              streamUrl={activeStreamUrl}
+              title={activePlayerTitle}
+              isAndroidNativeMode={isAndroidNativeMode}
+              onToggleAndroidNativeMode={() => setIsAndroidNativeMode((v) => !v)}
+            />
+          )}
 
           <div className="flex flex-wrap items-center justify-between gap-4">
             <div className="space-y-1">

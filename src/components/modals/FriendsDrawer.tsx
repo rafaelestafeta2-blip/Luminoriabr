@@ -1,64 +1,87 @@
 import React, { useState } from 'react';
 import {
   ArrowLeft,
+  Ban,
   MessageSquare,
-  MoreVertical,
   Search,
-  Send,
-  Sparkles,
   Star,
+  Trash2,
   User,
   UserPlus,
+  Users,
   X,
 } from 'lucide-react';
 import { useLuminoria } from '../../context/LuminoriaContext';
+import { FriendChatView } from './FriendChatView';
+import { FriendProfileModal } from './FriendProfileModal';
+import { FriendRequestsPanel } from './FriendRequestsPanel';
+import { normalizeInstagramHandle } from '../../services/authService';
 
 export const FriendsDrawer: React.FC = () => {
   const {
     isFriendsDrawerOpen,
     setIsFriendsDrawerOpen,
+    profile,
     friends,
+    friendRequests,
     sendFriendMessage,
+    reactToFriendMessage,
+    markFriendChatRead,
     addFriendByUsername,
+    acceptFriendRequest,
+    declineFriendRequest,
     toggleFriendFavorite,
+    toggleBlockFriend,
+    removeFriend,
     joinOrCreateCinemaRoom,
-    triggerCinemaFriendJoinedAlert,
+    cinemaRoom,
+    vodItems,
+    activeScheme,
   } = useLuminoria();
 
-  const [activeTab, setActiveTab] = useState<'all' | 'online' | 'pending'>('all');
+  const [activeTab, setActiveTab] = useState<'all' | 'requests' | 'online' | 'favorites' | 'blocked'>('all');
   const [searchQuery, setSearchQuery] = useState('');
   const [chatFriendId, setChatFriendId] = useState<string | null>(null);
-  const [messageText, setMessageText] = useState('');
-  const [newFriendName, setNewFriendName] = useState('');
-  const [feedback, setFeedback] = useState<string | null>(null);
+  const [inspectProfileFriendId, setInspectProfileFriendId] = useState<string | null>(null);
 
   if (!isFriendsDrawerOpen) return null;
 
-  const favoriteFriends = friends.filter((f) => f.isFavorite);
+  const myHandle = normalizeInstagramHandle(profile.handle || profile.username);
+  const activeFriends = friends.filter((f) => !f.isBlocked);
+  const onlineCount = activeFriends.filter(
+    (f) => f.status === 'online' || f.status === 'watching'
+  ).length;
+
+  const pendingRequestsCount = friendRequests.filter(
+    (r) =>
+      r.status === 'pending' &&
+      (r.toUserId === profile.userId ||
+        r.toHandle.toLowerCase() === myHandle.toLowerCase() ||
+        r.fromUserId === profile.userId)
+  ).length;
 
   const filteredFriends = friends.filter((f) => {
+    const q = searchQuery.trim().toLowerCase();
     const matchesSearch =
-      !searchQuery.trim() ||
-      f.username.toLowerCase().includes(searchQuery.toLowerCase());
+      !q ||
+      f.username.toLowerCase().includes(q) ||
+      (f.handle && f.handle.toLowerCase().includes(q));
     if (!matchesSearch) return false;
+
+    if (activeTab === 'blocked') return Boolean(f.isBlocked);
+    if (f.isBlocked) return false;
     if (activeTab === 'online') return f.status === 'online' || f.status === 'watching';
+    if (activeTab === 'favorites') return Boolean(f.isFavorite);
     return true;
   });
 
   const activeChatFriend = friends.find((f) => f.id === chatFriendId) || null;
+  const inspectFriend = friends.find((f) => f.id === inspectProfileFriendId) || null;
 
-  const handleSend = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!activeChatFriend || !messageText.trim()) return;
-    sendFriendMessage(activeChatFriend.id, messageText);
-    setMessageText('');
-  };
-
-  const handleAddFriend = (e: React.FormEvent) => {
-    e.preventDefault();
-    const res = addFriendByUsername(newFriendName);
-    setFeedback(res.message);
-    if (res.ok) setNewFriendName('');
+  const handleOpenChat = (friendId: string) => {
+    setInspectProfileFriendId(null);
+    setChatFriendId(friendId);
+    markFriendChatRead(friendId);
   };
 
   return (
@@ -66,311 +89,256 @@ export const FriendsDrawer: React.FC = () => {
       className="fixed inset-0 z-50 flex justify-end bg-black/75 backdrop-blur-xs"
       role="dialog"
       aria-modal="true"
-      aria-label="Luminora Amigos"
+      aria-label="Rede Social de Amigos"
     >
       <div
         className="w-full max-w-md bg-[#0B0C10] border-l border-white/10 h-full flex flex-col justify-between"
         style={{ paddingBottom: 'max(env(safe-area-inset-bottom, 0px), 16px)' }}
       >
-        {/* Top Header matching Screenshot 4: ✨ LUMINORA AMIGOS */}
-        <div className="p-5 pb-3 flex items-center justify-between">
+        {/* Top Header */}
+        <div className="p-4 border-b border-white/10 flex items-center justify-between">
           <div className="flex items-center gap-2.5">
-            {activeChatFriend ? (
+            {activeChatFriend || inspectFriend ? (
               <button
                 type="button"
-                onClick={() => setChatFriendId(null)}
+                onClick={() => {
+                  setChatFriendId(null);
+                  setInspectProfileFriendId(null);
+                }}
                 aria-label="Voltar para lista de amigos"
-                className="p-1.5 rounded-full hover:bg-white/10 text-white"
+                className="p-1.5 rounded-full hover:bg-white/10 text-white cursor-pointer"
               >
                 <ArrowLeft className="w-5 h-5" />
               </button>
             ) : (
-              <Sparkles className="w-5 h-5 text-[#A0A0B0]" />
+              <Users className="w-5 h-5" style={{ color: activeScheme.primaryHex }} />
             )}
-            <h2 className="text-xl font-extrabold font-display tracking-wide uppercase">
-              <span className="text-white">LUMINORA </span>
-              <span className="text-[#E91E8C]">AMIGOS</span>
-            </h2>
+            <div>
+              <h2 className="text-base font-extrabold font-display tracking-wide text-white leading-none">
+                Rede Social · Amigos ({activeFriends.length})
+              </h2>
+              <p className="text-[11px] font-mono text-cyan-400 mt-1">
+                Seu ID: {myHandle} · {onlineCount} online
+              </p>
+            </div>
           </div>
 
           <button
             type="button"
             onClick={() => setIsFriendsDrawerOpen(false)}
             aria-label="Fechar painel de amigos"
-            className="w-9 h-9 rounded-full text-[#A0A0B0] hover:text-white hover:bg-white/10 flex items-center justify-center transition-colors"
+            className="w-8 h-8 rounded-full text-[#A0A0B0] hover:text-white hover:bg-white/10 flex items-center justify-center transition-colors cursor-pointer"
           >
             <X className="w-5 h-5" />
           </button>
         </div>
 
-        {activeChatFriend ? (
-          /* Direct Chat Sub-View */
-          <div className="flex-1 flex flex-col overflow-hidden">
-            <div className="px-5 py-3 bg-[#14161D] border-y border-white/10 flex items-center justify-between">
-              <div>
-                <p className="text-sm font-bold text-white uppercase">
-                  {activeChatFriend.username}
-                </p>
-                <p className="text-xs text-[#8E929F]">
-                  {activeChatFriend.lastSeenLabel || activeChatFriend.status}
-                </p>
-              </div>
-              <button
-                type="button"
-                onClick={() => {
-                  triggerCinemaFriendJoinedAlert(activeChatFriend.username, 'LUMI92');
-                  setIsFriendsDrawerOpen(false);
-                  joinOrCreateCinemaRoom('LUMI92');
-                }}
-                className="px-3 py-1.5 rounded-lg bg-[#0EA5E9]/20 border border-[#0EA5E9]/40 text-xs font-semibold text-[#0EA5E9]"
-              >
-                Convidar p/ Sala
-              </button>
-            </div>
-
-            <div className="flex-1 p-4 space-y-3 overflow-y-auto">
-              {activeChatFriend.messages.length === 0 ? (
-                <p className="text-xs text-[#8E929F] text-center my-8">
-                  Nenhuma mensagem ainda. Envie um olá para {activeChatFriend.username}!
-                </p>
-              ) : (
-                activeChatFriend.messages.map((m) => (
-                  <div
-                    key={m.id}
-                    className={`flex flex-col ${m.fromMe ? 'items-end' : 'items-start'}`}
-                  >
-                    <div
-                      className={`max-w-[80%] px-3.5 py-2 rounded-2xl text-xs ${
-                        m.fromMe
-                          ? 'bg-[#0EA5E9] text-black font-semibold'
-                          : 'bg-[#171923] text-white border border-white/10'
-                      }`}
-                    >
-                      <p>{m.text}</p>
-                    </div>
-                    <span className="text-[10px] font-mono text-[#8E929F] mt-1">{m.time}</span>
-                  </div>
-                ))
-              )}
-            </div>
-
-            <form onSubmit={handleSend} className="p-4 border-t border-white/10 flex gap-2">
-              <input
-                type="text"
-                value={messageText}
-                onChange={(e) => setMessageText(e.target.value)}
-                placeholder={`Mensagem para ${activeChatFriend.username}...`}
-                aria-label="Digite sua mensagem direta"
-                className="flex-1 px-4 py-2.5 rounded-xl bg-[#14161D] border border-white/15 text-xs text-white placeholder-[#8E929F] focus:outline-none focus:border-[#0EA5E9]"
-              />
-              <button
-                type="submit"
-                aria-label="Enviar mensagem direta"
-                className="px-4 py-2.5 rounded-xl bg-[#0EA5E9] text-black font-bold flex items-center justify-center"
-              >
-                <Send className="w-4 h-4" />
-              </button>
-            </form>
-          </div>
+        {inspectFriend ? (
+          <FriendProfileModal
+            friend={inspectFriend}
+            onClose={() => setInspectProfileFriendId(null)}
+            onOpenChat={() => handleOpenChat(inspectFriend.id)}
+            onToggleFavorite={() => toggleFriendFavorite(inspectFriend.id)}
+            onToggleBlock={() => toggleBlockFriend(inspectFriend.id)}
+            onRemoveFriend={() => {
+              removeFriend(inspectFriend.id);
+              setInspectProfileFriendId(null);
+            }}
+          />
+        ) : activeChatFriend ? (
+          <FriendChatView
+            friend={activeChatFriend}
+            featuredMovieTitle={vodItems[0]?.title}
+            onSendMessage={(text, sharedMovie) =>
+              sendFriendMessage(activeChatFriend.id, text, sharedMovie)
+            }
+            onReactToMessage={(msgId, emoji) =>
+              reactToFriendMessage(activeChatFriend.id, msgId, emoji)
+            }
+            onToggleFavorite={() => toggleFriendFavorite(activeChatFriend.id)}
+            onToggleBlock={() => toggleBlockFriend(activeChatFriend.id)}
+            onRemoveFriend={() => {
+              removeFriend(activeChatFriend.id);
+              setChatFriendId(null);
+            }}
+            onInviteToCinema={() => {
+              joinOrCreateCinemaRoom(cinemaRoom.code);
+              sendFriendMessage(
+                activeChatFriend.id,
+                `Vem assistir comigo na Sala de Cinema! Digite o código de 6 dígitos: ${cinemaRoom.code}`
+              );
+            }}
+          />
         ) : (
-          /* Main Friends List View matching Screenshot 4 */
-          <div className="flex-1 overflow-y-auto px-5 pb-4 space-y-5">
-            {/* Search Input: 🔍 Buscar... */}
-            <div className="relative">
-              <Search className="w-4 h-4 text-[#8E929F] absolute left-4 top-1/2 -translate-y-1/2" />
-              <input
-                type="search"
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder="Buscar..."
-                aria-label="Buscar amigos"
-                className="w-full pl-11 pr-4 py-3 rounded-2xl bg-[#161820] border border-white/15 text-sm text-white placeholder-[#8E929F] focus:outline-none focus:border-[#0EA5E9]"
-              />
-            </div>
-
-            {/* Tabs: TODOS | ONLINE | PENDENTES */}
-            <div className="flex items-center gap-6 border-b border-white/10 text-xs font-extrabold tracking-wider uppercase">
+          <>
+            {/* Navigation Tabs */}
+            <div className="px-4 pt-3 pb-2 border-b border-white/5 flex items-center gap-1.5 overflow-x-auto scrollbar-none">
               <button
                 type="button"
                 onClick={() => setActiveTab('all')}
-                className={`pb-2.5 border-b-2 transition-colors ${
-                  activeTab === 'all'
-                    ? 'text-[#0EA5E9] border-[#0EA5E9]'
-                    : 'text-[#8E929F] border-transparent hover:text-white'
+                className={`px-3 py-1.5 rounded-lg text-xs font-semibold whitespace-nowrap shrink-0 cursor-pointer ${
+                  activeTab === 'all' ? 'bg-white text-black' : 'bg-white/5 text-white/70 hover:text-white'
                 }`}
               >
-                TODOS
+                Amigos ({activeFriends.length})
+              </button>
+              <button
+                type="button"
+                onClick={() => setActiveTab('requests')}
+                className={`px-3 py-1.5 rounded-lg text-xs font-semibold whitespace-nowrap shrink-0 flex items-center gap-1 cursor-pointer ${
+                  activeTab === 'requests'
+                    ? 'bg-cyan-400 text-black'
+                    : 'bg-cyan-500/15 text-cyan-300 border border-cyan-500/30'
+                }`}
+              >
+                <UserPlus className="w-3.5 h-3.5" />
+                <span>@Buscar & Pedidos ({pendingRequestsCount})</span>
               </button>
               <button
                 type="button"
                 onClick={() => setActiveTab('online')}
-                className={`pb-2.5 border-b-2 transition-colors ${
-                  activeTab === 'online'
-                    ? 'text-[#0EA5E9] border-[#0EA5E9]'
-                    : 'text-[#8E929F] border-transparent hover:text-white'
+                className={`px-3 py-1.5 rounded-lg text-xs font-semibold whitespace-nowrap shrink-0 cursor-pointer ${
+                  activeTab === 'online' ? 'bg-white text-black' : 'bg-white/5 text-white/70 hover:text-white'
                 }`}
               >
-                ONLINE
+                Online ({onlineCount})
               </button>
               <button
                 type="button"
-                onClick={() => setActiveTab('pending')}
-                className={`pb-2.5 border-b-2 transition-colors ${
-                  activeTab === 'pending'
-                    ? 'text-[#0EA5E9] border-[#0EA5E9]'
-                    : 'text-[#8E929F] border-transparent hover:text-white'
+                onClick={() => setActiveTab('blocked')}
+                className={`px-3 py-1.5 rounded-lg text-xs font-semibold whitespace-nowrap shrink-0 cursor-pointer ${
+                  activeTab === 'blocked' ? 'bg-rose-500 text-white' : 'bg-white/5 text-white/70 hover:text-white'
                 }`}
               >
-                PENDENTES
+                Bloqueados
               </button>
             </div>
 
-            {activeTab === 'pending' && (
-              <form onSubmit={handleAddFriend} className="space-y-2">
-                <div className="flex gap-2">
+            {activeTab === 'requests' ? (
+              <FriendRequestsPanel
+                currentUserId={profile.userId}
+                currentHandle={myHandle}
+                friends={friends}
+                friendRequests={friendRequests}
+                onSendRequestByHandle={addFriendByUsername}
+                onAcceptRequest={acceptFriendRequest}
+                onDeclineRequest={declineFriendRequest}
+              />
+            ) : (
+              <div className="flex-1 overflow-y-auto p-4 space-y-3">
+                {/* Filter Input */}
+                <div className="relative">
+                  <Search className="w-3.5 h-3.5 text-white/40 absolute left-3 top-1/2 -translate-y-1/2" />
                   <input
                     type="text"
-                    value={newFriendName}
-                    onChange={(e) => setNewFriendName(e.target.value)}
-                    placeholder="Adicionar amigo por username..."
-                    className="flex-1 px-3.5 py-2 rounded-xl bg-[#14161D] border border-white/15 text-xs text-white"
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    placeholder="Filtrar seus amigos por nome ou @id..."
+                    className="w-full pl-8 pr-3 py-2 rounded-xl bg-[#12141E] border border-white/10 text-xs text-white placeholder-white/35 focus:outline-none"
                   />
-                  <button
-                    type="submit"
-                    className="px-3.5 py-2 rounded-xl bg-[#E91E8C] text-white text-xs font-bold flex items-center gap-1.5"
-                  >
-                    <UserPlus className="w-3.5 h-3.5" />
-                    <span>Adicionar</span>
-                  </button>
                 </div>
-                {feedback && <p className="text-xs text-amber-400">{feedback}</p>}
-              </form>
-            )}
 
-            {/* AMIGOS FAVORITOS Horizontal Avatar Row */}
-            <div className="space-y-3">
-              <h3 className="text-xs font-extrabold tracking-wider text-[#B0B3C0] uppercase">
-                AMIGOS FAVORITOS
-              </h3>
-
-              <div className="flex items-center gap-3.5 overflow-x-auto pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-                {favoriteFriends.map((fav) => {
-                  const isLetterAvatar = fav.username.startsWith('naikel');
-                  return (
+                {filteredFriends.length === 0 ? (
+                  <div className="p-8 rounded-2xl bg-white/[0.02] border border-white/5 text-center space-y-3">
+                    <Users className="w-8 h-8 text-white/30 mx-auto" />
+                    <div className="space-y-1">
+                      <p className="text-sm font-bold text-white">Sua lista de amigos está vazia</p>
+                      <p className="text-xs text-[#A0A0B0]">
+                        Nenhum amigo fictício é adicionado. Busque seus amigos reais pelo @username único!
+                      </p>
+                    </div>
                     <button
-                      key={`fav-${fav.id}`}
                       type="button"
-                      onClick={() => setChatFriendId(fav.id)}
-                      className="flex flex-col items-center space-y-1.5 shrink-0 w-16 group"
+                      onClick={() => setActiveTab('requests')}
+                      className="px-4 py-2 rounded-xl bg-cyan-500 hover:bg-cyan-400 text-black text-xs font-bold inline-flex items-center gap-1.5 cursor-pointer"
                     >
-                      <div
-                        className="w-16 h-16 rounded-full flex items-center justify-center border border-white/15 overflow-hidden group-hover:border-[#0EA5E9] transition-colors"
-                        style={{ backgroundColor: fav.avatarColor || '#334155' }}
-                      >
-                        {isLetterAvatar ? (
-                          <span className="text-xl font-extrabold text-[#0EA5E9]">
-                            {fav.username.charAt(0).toUpperCase()}
-                          </span>
-                        ) : (
-                          <div className="w-full h-full flex flex-col items-center justify-end bg-gradient-to-b from-sky-400/35 to-slate-900">
-                            <span className="w-5 h-5 rounded-full bg-[#E2B897] mb-0.5" />
-                            <span className="w-10 h-5 rounded-t-full bg-white/80" />
-                          </div>
-                        )}
-                      </div>
-                      <span className="text-[11px] text-[#B0B3C0] truncate w-full text-center">
-                        {fav.username}
-                      </span>
+                      <UserPlus className="w-3.5 h-3.5" />
+                      <span>Buscar por @username</span>
                     </button>
-                  );
-                })}
-              </div>
-            </div>
-
-            {/* AMIGOS (11) 2-Column Grid */}
-            <div className="space-y-3">
-              <h3 className="text-xs font-extrabold tracking-wider text-[#B0B3C0] uppercase">
-                AMIGOS ({filteredFriends.length})
-              </h3>
-
-              <div className="grid grid-cols-2 gap-3">
-                {filteredFriends.map((fr) => (
-                  <div
-                    key={fr.id}
-                    className="p-4 rounded-2xl bg-[#14161D] border border-white/10 flex flex-col items-center text-center space-y-2"
-                  >
-                    {/* Avatar */}
-                    <div
-                      className="w-16 h-16 rounded-full flex items-center justify-center border border-white/15 overflow-hidden"
-                      style={{ backgroundColor: fr.avatarColor || '#334155' }}
-                    >
-                      <div className="w-full h-full flex flex-col items-center justify-end bg-gradient-to-b from-sky-400/35 to-slate-900">
-                        <span className="w-5 h-5 rounded-full bg-[#E2B897] mb-0.5" />
-                        <span className="w-10 h-5 rounded-t-full bg-white/80" />
-                      </div>
-                    </div>
-
-                    {/* Uppercase Name */}
-                    <p className="text-xs font-extrabold text-white uppercase truncate w-full pt-1">
-                      {fr.username}
-                    </p>
-
-                    {/* Status Label */}
-                    <p className="text-[11px] text-[#8E929F]">
-                      {fr.lastSeenLabel || 'Offline'}
-                    </p>
-
-                    {/* 4 Action Icons Row matching Screenshot 4 */}
-                    <div className="flex items-center justify-between w-full pt-2 px-1">
-                      <button
-                        type="button"
-                        onClick={() => setChatFriendId(fr.id)}
-                        aria-label={`Ver perfil de ${fr.username}`}
-                        className="p-1.5 text-[#0EA5E9] hover:bg-white/5 rounded-lg"
-                      >
-                        <User className="w-4 h-4" />
-                      </button>
-
-                      <button
-                        type="button"
-                        onClick={() => setChatFriendId(fr.id)}
-                        aria-label={`Conversar com ${fr.username}`}
-                        className="p-1.5 text-[#0EA5E9] hover:bg-white/5 rounded-lg"
-                      >
-                        <MessageSquare className="w-4 h-4" />
-                      </button>
-
-                      <button
-                        type="button"
-                        onClick={() => toggleFriendFavorite(fr.id)}
-                        aria-label={`Favoritar amigo ${fr.username}`}
-                        className="p-1.5 hover:bg-white/5 rounded-lg"
-                      >
-                        <Star
-                          className={`w-4 h-4 ${
-                            fr.isFavorite
-                              ? 'fill-current text-[#FACC15]'
-                              : 'text-[#8E929F]'
-                          }`}
-                        />
-                      </button>
-
-                      <button
-                        type="button"
-                        onClick={() => {
-                          triggerCinemaFriendJoinedAlert(fr.username, 'LUMI92');
-                        }}
-                        aria-label={`Mais opções para ${fr.username}`}
-                        className="p-1.5 text-[#8E929F] hover:text-white rounded-lg"
-                      >
-                        <MoreVertical className="w-4 h-4" />
-                      </button>
-                    </div>
                   </div>
-                ))}
+                ) : (
+                  <div className="space-y-2">
+                    {filteredFriends.map((friend) => (
+                      <div
+                        key={friend.id}
+                        className="p-3 rounded-xl bg-[#12141E] border border-white/10 flex items-center justify-between gap-2"
+                      >
+                        <button
+                          type="button"
+                          onClick={() => handleOpenChat(friend.id)}
+                          className="flex items-center gap-3 min-w-0 flex-1 text-left cursor-pointer"
+                        >
+                          <div className="w-10 h-10 rounded-full overflow-hidden bg-white/10 shrink-0 flex items-center justify-center text-xs font-bold text-white">
+                            {friend.avatarUrl ? (
+                              <img
+                                src={friend.avatarUrl}
+                                alt={friend.username}
+                                referrerPolicy="no-referrer"
+                                className="w-full h-full object-cover"
+                              />
+                            ) : (
+                              friend.username.slice(0, 2).toUpperCase()
+                            )}
+                          </div>
+                          <div className="min-w-0">
+                            <p className="text-xs font-bold text-white truncate">{friend.username}</p>
+                            <p className="text-[11px] font-mono text-cyan-400 truncate">
+                              {friend.handle || normalizeInstagramHandle(friend.username)}
+                            </p>
+                          </div>
+                        </button>
+
+                        <div className="flex items-center gap-1 shrink-0">
+                          <button
+                            type="button"
+                            onClick={() => handleOpenChat(friend.id)}
+                            aria-label="Abrir conversa"
+                            className="p-2 rounded-lg bg-white/5 hover:bg-white/15 text-white cursor-pointer"
+                          >
+                            <MessageSquare className="w-3.5 h-3.5" />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setInspectProfileFriendId(friend.id)}
+                            aria-label="Ver perfil"
+                            className="p-2 rounded-lg bg-white/5 hover:bg-white/15 text-white/70 hover:text-white cursor-pointer"
+                          >
+                            <User className="w-3.5 h-3.5" />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => toggleFriendFavorite(friend.id)}
+                            aria-label="Favoritar amigo"
+                            className={`p-2 rounded-lg bg-white/5 hover:bg-white/15 cursor-pointer ${
+                              friend.isFavorite ? 'text-amber-400' : 'text-white/50'
+                            }`}
+                          >
+                            <Star className="w-3.5 h-3.5" />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => toggleBlockFriend(friend.id)}
+                            aria-label="Bloquear amigo"
+                            className="p-2 rounded-lg bg-white/5 hover:bg-rose-500/20 text-white/50 hover:text-rose-300 cursor-pointer"
+                          >
+                            <Ban className="w-3.5 h-3.5" />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => removeFriend(friend.id)}
+                            aria-label="Remover amigo"
+                            className="p-2 rounded-lg bg-white/5 hover:bg-rose-500/20 text-white/50 hover:text-rose-300 cursor-pointer"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
-            </div>
-          </div>
+            )}
+          </>
         )}
       </div>
     </div>

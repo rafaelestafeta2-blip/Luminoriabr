@@ -9,11 +9,11 @@ import { SeriesEpisodeItem, VodItem } from '../types/luminoria';
 const detailsCache = new Map<string, any>();
 
 /**
- * Selects a balanced initial slice across all genres + newest releases so
- * every category row on HomeScreen and SeriesScreen is richly populated,
- * while keeping the DOM fast and responsive.
+ * Selects a balanced initial slice across all genres AND across multiple release years
+ * (2026 -> 2025 -> 2024 -> 2023 -> 2022 -> <=2021) so every genre carousel on HomeScreen
+ * seamlessly transitions from 2026 to 2025, 2024, 2023 and older classics.
  */
-export function selectBalancedMovies(allMovies: VodItem[], maxTotal: number = 1800): VodItem[] {
+export function selectBalancedMovies(allMovies: VodItem[], maxTotal: number = 2600): VodItem[] {
   if (allMovies.length <= maxTotal) return allMovies;
 
   const pickedIds = new Set<string>();
@@ -31,30 +31,98 @@ export function selectBalancedMovies(allMovies: VodItem[], maxTotal: number = 18
     'ANIMAÇÃO',
     'DRAMA',
     'ROMANCE',
+    'DOCUMENTÁRIOS',
     'DISNEY+',
     'NETFLIX',
   ];
 
-  // Pick up to 110 per category first so every filter and row has plenty of movies
+  const yearBuckets = [
+    (y: number) => y >= 2026,
+    (y: number) => y === 2025,
+    (y: number) => y === 2024,
+    (y: number) => y === 2023,
+    (y: number) => y === 2022,
+    (y: number) => y <= 2021,
+  ];
+
+  // For each genre, pick up to 32 movies from EACH year bucket (2026, 2025, 2024, 2023, 2022, <=2021)
   for (const cat of targetCategories) {
-    let count = 0;
-    for (const m of allMovies) {
-      if (pickedIds.has(m.id)) continue;
-      if (m.category === cat || (m.rawCategoryName && m.rawCategoryName.toUpperCase().includes(cat))) {
-        pickedIds.add(m.id);
-        result.push(m);
-        count++;
-        if (count >= 110) break;
+    for (const matchesYear of yearBuckets) {
+      let bucketCount = 0;
+      for (const m of allMovies) {
+        if (pickedIds.has(m.id)) continue;
+        const catMatch =
+          m.category === cat ||
+          Boolean(m.rawCategoryName && m.rawCategoryName.toUpperCase().includes(cat));
+        if (catMatch && matchesYear(m.year || 2024)) {
+          pickedIds.add(m.id);
+          result.push(m);
+          bucketCount++;
+          if (bucketCount >= 32) break;
+        }
       }
     }
   }
 
-  // Fill remainder with newest releases
+  // Fill remainder up to maxTotal
   for (const m of allMovies) {
     if (result.length >= maxTotal) break;
     if (!pickedIds.has(m.id)) {
       pickedIds.add(m.id);
       result.push(m);
+    }
+  }
+
+  return result;
+}
+
+/**
+ * Selects a balanced initial slice of Series across all series genres and platforms
+ * ordered from 2026 -> 2025 -> 2024 -> 2023...
+ */
+export function selectBalancedSeries(allSeries: VodItem[], maxTotal: number = 1800): VodItem[] {
+  if (allSeries.length <= maxTotal) return allSeries;
+
+  const pickedIds = new Set<string>();
+  const result: VodItem[] = [];
+
+  const seriesCategories = [
+    'AÇÃO & AVENTURA',
+    'DRAMA',
+    'SUSPENSE & CRIME',
+    'FICÇÃO & FANTASIA',
+    'COMÉDIA',
+    'TERROR & MISTÉRIO',
+    'ANIMES & ANIMAÇÃO',
+    'DORAMAS',
+    'DOCUMENTÁRIOS',
+    'NOVELAS',
+    'NETFLIX',
+    'MAX / HBO',
+    'PRIME VIDEO',
+    'DISNEY+',
+    'GLOBOPLAY',
+  ];
+
+  for (const cat of seriesCategories) {
+    let count = 0;
+    for (const s of allSeries) {
+      if (pickedIds.has(s.id)) continue;
+      const rawUp = (s.rawCategoryName || '').toUpperCase();
+      if (s.category === cat || rawUp.includes(cat.split(' ')[0])) {
+        pickedIds.add(s.id);
+        result.push(s);
+        count++;
+        if (count >= 120) break;
+      }
+    }
+  }
+
+  for (const s of allSeries) {
+    if (result.length >= maxTotal) break;
+    if (!pickedIds.has(s.id)) {
+      pickedIds.add(s.id);
+      result.push(s);
     }
   }
 

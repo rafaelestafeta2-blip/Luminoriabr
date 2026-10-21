@@ -21,3 +21,14 @@
 .tabular-nums {
   font-variant-numeric: tabular-nums;
 }
+
+/* Smart TV 10-Foot Focus Ring for Remote Control D-Pad */
+body.tv-mode-active *:focus,
+body.tv-mode-active *:focus-visible {
+  outline: 3px solid #00E5FF !important;
+  outline-offset: 3px !important;
+  box-shadow: 0 0 24px rgba(0, 229, 255, 0.8) !important;
+  transform: scale(1.025) !important;
+  transition: transform 0.12s ease-out, box-shadow 0.12s ease-out !important;
+  z-index: 40 !important;
+}

@@ -1,13 +1,28 @@
 import React, { useState } from 'react';
-import { Trophy, X } from 'lucide-react';
+import { Check, Trophy, UserPlus, X } from 'lucide-react';
 import { useLuminoria } from '../../context/LuminoriaContext';
 import { coinsForRank } from '../../utils/luminoriaLogic';
 
 export const RankingDrawer: React.FC = () => {
-  const { isRankDrawerOpen, setIsRankDrawerOpen, rankEntries } = useLuminoria();
+  const {
+    isRankDrawerOpen,
+    setIsRankDrawerOpen,
+    rankEntries,
+    profile,
+    friends,
+    addFriendByUsername,
+  } = useLuminoria();
   const [showFullRules, setShowFullRules] = useState(false);
+  const [addedUsernames, setAddedUsernames] = useState<string[]>([]);
 
   if (!isRankDrawerOpen) return null;
+
+  const handleQuickAddFriend = (username: string) => {
+    const res = addFriendByUsername(username);
+    if (res.ok) {
+      setAddedUsernames((prev) => [...prev, username]);
+    }
+  };
 
   return (
     <div
@@ -28,7 +43,9 @@ export const RankingDrawer: React.FC = () => {
               <h2 className="text-xl font-extrabold font-display tracking-wide text-white uppercase leading-tight">
                 RANKING GLOBAL
               </h2>
-              <p className="text-xs font-bold text-[#FACC15]">Top 20 Mensal</p>
+              <p className="text-xs font-bold text-[#FACC15]">
+                Top 20 Mensal · Sincronizado no Firestore
+              </p>
             </div>
           </div>
 
@@ -36,7 +53,7 @@ export const RankingDrawer: React.FC = () => {
             type="button"
             onClick={() => setIsRankDrawerOpen(false)}
             aria-label="Fechar Ranking Global"
-            className="w-10 h-10 rounded-full text-[#A0A0B0] hover:text-white hover:bg-white/10 flex items-center justify-center transition-colors"
+            className="w-10 h-10 rounded-full text-[#A0A0B0] hover:text-white hover:bg-white/10 flex items-center justify-center transition-colors cursor-pointer"
           >
             <X className="w-6 h-6" />
           </button>
@@ -49,6 +66,13 @@ export const RankingDrawer: React.FC = () => {
             const isTop1 = r === 1;
             const isTop2 = r === 2;
             const isTop3 = r === 3;
+            const isMe = Boolean(
+              (profile.userId && entry.userId === profile.userId) ||
+              (profile.username && entry.username.toLowerCase() === profile.username.toLowerCase())
+            );
+            const isAlreadyFriend =
+              friends.some((f) => f.username.toLowerCase() === entry.username.toLowerCase()) ||
+              addedUsernames.includes(entry.username);
 
             const cardClass = isTop1
               ? 'bg-[#1D1A10] border-[#CA8A04]/75'
@@ -56,6 +80,8 @@ export const RankingDrawer: React.FC = () => {
               ? 'bg-[#171920] border-[#94A3B8]/55'
               : isTop3
               ? 'bg-[#1D1511] border-[#B45309]/65'
+              : isMe
+              ? 'bg-[#141A29] border-cyan-500/50'
               : 'bg-[#14161D] border-white/5';
 
             const rankTextColor = isTop1
@@ -77,6 +103,7 @@ export const RankingDrawer: React.FC = () => {
             const initial = entry.username.charAt(0).toUpperCase();
             const showLetterOnly =
               entry.username.startsWith('naikel') || entry.username.startsWith('thiago');
+            const avatarSrc = isMe ? profile.avatarUrl || entry.avatarUrl : entry.avatarUrl;
 
             return (
               <div
@@ -95,7 +122,13 @@ export const RankingDrawer: React.FC = () => {
                     className="w-12 h-12 rounded-full shrink-0 flex items-center justify-center text-base font-bold text-white border border-white/15 overflow-hidden"
                     style={{ backgroundColor: entry.avatarColor || '#334155' }}
                   >
-                    {showLetterOnly ? (
+                    {avatarSrc ? (
+                      <img
+                        src={avatarSrc}
+                        alt={entry.username}
+                        className="w-full h-full object-cover"
+                      />
+                    ) : showLetterOnly ? (
                       <span>{initial}</span>
                     ) : (
                       <div className="w-full h-full flex flex-col items-center justify-end bg-gradient-to-b from-sky-400/30 to-slate-900">
@@ -110,31 +143,64 @@ export const RankingDrawer: React.FC = () => {
                     <p className={`text-sm sm:text-base font-bold truncate ${nameTextColor}`}>
                       {entry.username}
                       {entry.isAdminCrown && <span className="ml-1">👑</span>}
+                      {isMe && (
+                        <span className="ml-1.5 px-1.5 py-0.5 rounded bg-cyan-500/20 text-cyan-300 text-[10px] font-mono">
+                          VOCÊ
+                        </span>
+                      )}
                     </p>
                     <p className="text-xs text-[#8E929F] truncate">
-                      {entry.watchTimeFormatted || `${entry.watchHours}h assistidos`}
+                      {entry.watchTimeFormatted || `${entry.watchHours}h assistidos`} ·{' '}
+                      <span className="text-cyan-400 font-mono">{entry.xp} XP</span>
                     </p>
                   </div>
                 </div>
 
-                {/* Right Trophy Icon for Top 3 or Prize preview */}
-                {r <= 3 ? (
-                  <Trophy
-                    className={`w-6 h-6 shrink-0 ${
-                      isTop1
-                        ? 'text-[#FACC15]'
-                        : isTop2
-                        ? 'text-[#CBD5E1]'
-                        : 'text-[#D97706]'
-                    }`}
-                  />
-                ) : (
-                  showFullRules && (
-                    <span className="text-xs font-mono font-bold text-amber-400 shrink-0">
-                      +{coinsForRank(r)} Lumin.
-                    </span>
-                  )
-                )}
+                {/* Right Trophy Icon or Add Friend Action */}
+                <div className="flex items-center gap-2 shrink-0">
+                  {!isMe && (
+                    <button
+                      type="button"
+                      onClick={() => handleQuickAddFriend(entry.username)}
+                      disabled={isAlreadyFriend}
+                      title={
+                        isAlreadyFriend
+                          ? 'Já está nos seus amigos'
+                          : `Adicionar ${entry.username} aos amigos`
+                      }
+                      aria-label={`Adicionar ${entry.username} aos amigos`}
+                      className={`p-2 rounded-xl border text-xs font-bold transition-colors cursor-pointer ${
+                        isAlreadyFriend
+                          ? 'bg-emerald-500/15 border-emerald-500/30 text-emerald-400'
+                          : 'bg-white/5 hover:bg-cyan-500/20 border-white/10 text-cyan-400'
+                      }`}
+                    >
+                      {isAlreadyFriend ? (
+                        <Check className="w-3.5 h-3.5" />
+                      ) : (
+                        <UserPlus className="w-3.5 h-3.5" />
+                      )}
+                    </button>
+                  )}
+
+                  {r <= 3 ? (
+                    <Trophy
+                      className={`w-6 h-6 shrink-0 ${
+                        isTop1
+                          ? 'text-[#FACC15]'
+                          : isTop2
+                          ? 'text-[#CBD5E1]'
+                          : 'text-[#D97706]'
+                      }`}
+                    />
+                  ) : (
+                    showFullRules && (
+                      <span className="text-xs font-mono font-bold text-amber-400 shrink-0">
+                        +{coinsForRank(r)} Lumin.
+                      </span>
+                    )
+                  )}
+                </div>
               </div>
             );
           })}

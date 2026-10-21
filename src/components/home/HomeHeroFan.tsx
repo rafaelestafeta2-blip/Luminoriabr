@@ -57,20 +57,28 @@ export const HomeHeroFan: React.FC<HomeHeroFanProps> = ({
 
         {/* Selected Movie Details & Actions */}
         <div className="w-full lg:w-1/2 space-y-3 text-center lg:text-left">
-          <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-md bg-black/60 border border-white/15 text-xs font-mono text-white">
+          <div className="inline-flex flex-wrap items-center gap-1.5 px-3 py-1 rounded-md bg-black/60 border border-white/15 text-xs font-mono text-white">
+            {featuredMovie.isComingSoon && (
+              <>
+                <span className="px-2 py-0.5 rounded bg-amber-500 text-black font-extrabold text-[10px] uppercase tracking-wider">
+                  EM BREVE
+                </span>
+                <span aria-hidden="true">·</span>
+              </>
+            )}
             <Star className="w-3.5 h-3.5 fill-current text-amber-400" />
             <span>{featuredMovie.rating > 0 ? featuredMovie.rating : 8.4}</span>
             <span aria-hidden="true">·</span>
             <span>{featuredMovie.category}</span>
             <span aria-hidden="true">·</span>
-            <span>{featuredMovie.year}</span>
+            <span className="text-cyan-300 font-bold">{featuredMovie.year}</span>
           </div>
 
           <h1 className="text-2xl sm:text-4xl font-extrabold font-display text-white tracking-tight">
             {featuredMovie.title}
           </h1>
 
-          <p className="text-xs sm:text-sm text-[#A0A0B0] leading-relaxed max-w-xl mx-auto lg:mx-0">
+          <p className="text-xs sm:text-sm text-[#A0A0B0] leading-relaxed max-w-xl mx-auto lg:mx-0 line-clamp-3">
             {featuredMovie.synopsis}
           </p>
 
@@ -81,7 +89,7 @@ export const HomeHeroFan: React.FC<HomeHeroFanProps> = ({
               className="min-h-[44px] px-7 py-2.5 rounded-full bg-white text-black font-bold text-sm flex items-center gap-2 hover:bg-white/90 transition-transform active:scale-95 cursor-pointer shadow-lg"
             >
               <Play className="w-4 h-4 fill-current" />
-              <span>Assistir</span>
+              <span>{featuredMovie.isComingSoon ? 'Ver Trailer (Em Breve)' : 'Assistir'}</span>
             </button>
 
             <button
@@ -98,3 +106,4 @@ export const HomeHeroFan: React.FC<HomeHeroFanProps> = ({
     </section>
   );
 };
+

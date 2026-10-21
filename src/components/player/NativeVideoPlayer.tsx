@@ -1,14 +1,19 @@
-import React from 'react';
-import { Loader2, Play, Smartphone, X } from 'lucide-react';
+import React, { useEffect, useState } from 'react';
+import { Clapperboard, Loader2, Play, Smartphone, Tv, X } from 'lucide-react';
 import { useVideoPlayer } from './useVideoPlayer';
 import { PlayerControlsOverlay } from './PlayerControlsOverlay';
 import { VideoPlayerProps } from './playerTypes';
-import { buildAndroidNativeIntentUrls } from '../../services/streamUrlHelper';
+import {
+  buildAndroidNativeIntentUrls,
+  isPlaceholderStreamUrl,
+} from '../../services/streamUrlHelper';
+import { getFallbackYoutubeTrailerId } from '../../services/tmdbEnrichClient';
 
 export const NativeVideoPlayer: React.FC<VideoPlayerProps> = ({
   title,
   streamUrl,
   rawStreamUrl,
+  youtubeTrailerId,
   posterUrl,
   backdropUrl,
   category,
@@ -17,6 +22,16 @@ export const NativeVideoPlayer: React.FC<VideoPlayerProps> = ({
   onClose,
   onWatchProgress,
 }) => {
+  const effectiveRaw = rawStreamUrl || streamUrl;
+  const isCatalogPlaceholder = isPlaceholderStreamUrl(effectiveRaw);
+  const [showOfficialTrailer, setShowOfficialTrailer] = useState<boolean>(isCatalogPlaceholder);
+  const [trailerElapsedSec, setTrailerElapsedSec] = useState<number>(0);
+
+  useEffect(() => {
+    setShowOfficialTrailer(isPlaceholderStreamUrl(rawStreamUrl || streamUrl));
+    setTrailerElapsedSec(0);
+  }, [rawStreamUrl, streamUrl, title]);
+
   const {
     videoRef,
     containerRef,
@@ -50,10 +65,52 @@ export const NativeVideoPlayer: React.FC<VideoPlayerProps> = ({
     setIsBuffering,
     setBuffered,
     setIsPlaying,
-  } = useVideoPlayer(streamUrl, onWatchProgress, title);
+  } = useVideoPlayer(streamUrl, undefined, title);
 
   const displayPoster = backdropUrl || posterUrl;
-  const androidIntents = buildAndroidNativeIntentUrls(rawStreamUrl || streamUrl, title);
+  const androidIntents = buildAndroidNativeIntentUrls(effectiveRaw, title);
+  const trailerId = youtubeTrailerId || getFallbackYoutubeTrailerId(title);
+
+  // Track watch progress while in Official TMDB Trailer mode (standard trailer duration ~120s, so 20% = 24s)
+  useEffect(() => {
+    if (!showOfficialTrailer || !onWatchProgress) return;
+    const timer = setInterval(() => {
+      setTrailerElapsedSec((prev) => {
+        const next = prev + 2;
+        onWatchProgress(next, 120);
+        return next;
+      });
+    }, 2000);
+    return () => clearInterval(timer);
+  }, [showOfficialTrailer, onWatchProgress]);
+
+  if (showOfficialTrailer) {
+    const pctWatched = Math.min(100, Math.round((trailerElapsedSec / 120) * 100));
+    return (
+      <div className="relative w-full aspect-video bg-black rounded-2xl overflow-hidden border border-white/15">
+        <iframe
+          src={`https://www.youtube.com/embed/${trailerId}?autoplay=1&rel=0&modestbranding=1`}
+          title={`Trailer Oficial TMDB HD - ${title}`}
+          allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+          allowFullScreen
+          className="w-full h-full border-0"
+        />
+        <div className="absolute top-3 left-3 z-30 px-3 py-1 rounded-xl bg-black/80 border border-white/15 text-[11px] font-mono text-emerald-400 tabular-nums">
+          Trailer Oficial TMDB HD · Progresso: {pctWatched}%
+        </div>
+        {!isCatalogPlaceholder && (
+          <button
+            type="button"
+            onClick={() => setShowOfficialTrailer(false)}
+            className="absolute top-3 right-3 z-30 px-3 py-1.5 rounded-xl bg-black/85 hover:bg-black text-white border border-white/20 text-xs font-bold flex items-center gap-1.5 cursor-pointer"
+          >
+            <Tv className="w-3.5 h-3.5" />
+            <span>Tentar Stream M3U Direto</span>
+          </button>
+        )}
+      </div>
+    );
+  }
 
   return (
     <div
@@ -62,10 +119,8 @@ export const NativeVideoPlayer: React.FC<VideoPlayerProps> = ({
       onClick={handleUserActivity}
       className="relative w-full aspect-video bg-black rounded-2xl overflow-hidden shadow-[0_0_50px_rgba(0,0,0,0.8)] border border-white/10 group select-none"
     >
-      {/* Ambient background glow */}
       <div className="absolute inset-0 bg-radial from-cyan-500/10 via-transparent to-black pointer-events-none" />
 
-      {/* Real HTML5 / Android WebView Hardware Video Element */}
       <video
         ref={videoRef}
         src={currentSrc}
@@ -77,16 +132,17 @@ export const NativeVideoPlayer: React.FC<VideoPlayerProps> = ({
         onClick={!isAndroidNativeMode ? togglePlay : undefined}
         onTimeUpdate={(e) => {
           const ct = e.currentTarget.currentTime;
+          const dur = e.currentTarget.duration;
           setCurrentTime(ct);
-          if (onWatchProgress) onWatchProgress(ct);
+          if (onWatchProgress) {
+            onWatchProgress(ct, Number.isFinite(dur) && dur > 0 ? dur : duration || 120);
+          }
         }}
         onLoadedMetadata={(e) => {
           setDuration(e.currentTarget.duration);
           setIsBuffering(false);
         }}
-        onCanPlay={() => {
-          setIsBuffering(false);
-        }}
+        onCanPlay={() => setIsBuffering(false)}
         onProgress={(e) => {
           const v = e.currentTarget;
           if (v.buffered.length > 0 && v.duration > 0) {
@@ -104,7 +160,6 @@ export const NativeVideoPlayer: React.FC<VideoPlayerProps> = ({
         className="w-full h-full object-contain bg-black cursor-pointer"
       />
 
-      {/* Top Close Button when in Native Android OS Controls Mode */}
       {isAndroidNativeMode && onClose && (
         <div className="absolute top-3 right-3 z-30 flex items-center gap-2">
           <span className="px-2.5 py-1 rounded-full bg-emerald-500/90 text-black text-[10px] font-black uppercase tracking-wider">
@@ -121,23 +176,55 @@ export const NativeVideoPlayer: React.FC<VideoPlayerProps> = ({
         </div>
       )}
 
-      {/* Center Loading / Buffering Overlay */}
-      {isBuffering && (
+      {isBuffering && !hasError && (
         <div className="absolute inset-0 z-15 flex flex-col items-center justify-center bg-black/50 backdrop-blur-xs pointer-events-none">
           <div className="p-4 rounded-2xl bg-black/80 border border-cyan-500/30 flex flex-col items-center gap-2 shadow-2xl">
             <Loader2 className="w-8 h-8 text-cyan-400 animate-spin" />
             <span className="text-xs font-bold text-white tracking-wide">
-              Carregando Transmissão HD...
-            </span>
-            <span className="text-[10px] text-cyan-300/80 font-mono">
-              Sincronizando decodificador de vídeo e áudio
+              Conectando ao Servidor M3U HD...
             </span>
           </div>
         </div>
       )}
 
-      {/* Center Big Play Button when Paused and not Buffering */}
-      {!isAndroidNativeMode && !isPlaying && !isBuffering && (
+      {hasError && (
+        <div className="absolute inset-0 z-25 flex flex-col items-center justify-center p-6 bg-black/85 backdrop-blur-md text-center">
+          <div className="max-w-md space-y-3">
+            <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-amber-500/20 border border-amber-400/40 text-amber-300 text-[11px] font-extrabold uppercase tracking-wider">
+              Codec Nativo M3U ou Trailer Oficial TMDB Disponível
+            </span>
+            <h3 className="text-lg sm:text-xl font-black text-white">{title}</h3>
+            <p className="text-xs text-white/70 leading-relaxed">
+              Reproduza o Trailer Oficial HD do TMDB agora mesmo ou abra o stream M3U diretamente no Player Nativo.
+            </p>
+            <div className="flex flex-wrap items-center justify-center gap-2.5 pt-2">
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setShowOfficialTrailer(true);
+                }}
+                className="px-4 py-2.5 rounded-xl bg-white hover:bg-white/90 text-black font-extrabold text-xs flex items-center gap-2 cursor-pointer shadow-lg"
+              >
+                <Clapperboard className="w-4 h-4" />
+                <span>Assistir Trailer Oficial TMDB</span>
+              </button>
+              <a
+                href={androidIntents.primaryNativeUrl}
+                target={androidIntents.platform === 'ios' ? '_blank' : undefined}
+                rel={androidIntents.platform === 'ios' ? 'noopener noreferrer' : undefined}
+                onClick={(e) => e.stopPropagation()}
+                className="px-4 py-2.5 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-black font-extrabold text-xs flex items-center gap-2 shadow-lg cursor-pointer"
+              >
+                <Smartphone className="w-4 h-4" />
+                <span>{androidIntents.primaryNativeLabel}</span>
+              </a>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {!isAndroidNativeMode && !isPlaying && !isBuffering && !hasError && (
         <button
           type="button"
           onClick={togglePlay}
@@ -148,18 +235,6 @@ export const NativeVideoPlayer: React.FC<VideoPlayerProps> = ({
         </button>
       )}
 
-      {/* Native Android Intent Quick-Launch Pill if IPTV server blocked browser */}
-      {hasError && (
-        <a
-          href={androidIntents.systemVideoPlayerIntent}
-          className="absolute top-4 right-16 z-25 px-3 py-1.5 rounded-xl bg-emerald-950/90 border border-emerald-500/50 text-[11px] font-bold text-emerald-300 hidden sm:flex items-center gap-2 shadow-lg backdrop-blur-md hover:bg-emerald-900 transition-colors"
-        >
-          <Smartphone className="w-3.5 h-3.5 text-emerald-400" />
-          <span>Abrir no Player Nativo Android</span>
-        </a>
-      )}
-
-      {/* Custom Cinema Controls Overlay (hidden when using pure Android OS native controls) */}
       {!isAndroidNativeMode && (
         <PlayerControlsOverlay
           title={title}

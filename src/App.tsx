@@ -19,8 +19,10 @@ import { RankingDrawer } from './components/modals/RankingDrawer';
 import { NotificationsDrawer } from './components/modals/NotificationsDrawer';
 import { TmdbSyncModal } from './components/modals/TmdbSyncModal';
 import { MovieDetailModal } from './components/modals/MovieDetailModal';
+import { AuthModal } from './components/modals/AuthModal';
 import { BottomAppDock } from './components/layout/BottomAppDock';
 import { LuminoriaAnimatedIntro } from './components/intro/LuminoriaAnimatedIntro';
+import { AuthGateScreen } from './screens/AuthGateScreen';
 
 const MainWorkspace: React.FC = () => {
   const {
@@ -31,6 +33,8 @@ const MainWorkspace: React.FC = () => {
     closeTmdbMovieDetail,
     showIntro,
     setShowIntro,
+    isLoggedIn,
+    activeScheme,
   } = useLuminoria();
 
   const handleIntroComplete = () => {
@@ -40,11 +44,17 @@ const MainWorkspace: React.FC = () => {
     setShowIntro(false);
   };
 
+  if (!isLoggedIn) {
+    return <AuthGateScreen />;
+  }
+
   return (
     <div
       id="top"
-      className="min-h-screen bg-[#050508] text-[#F4F4F6] flex flex-col justify-between"
+      className="min-h-screen text-[#F4F4F6] flex flex-col justify-between transition-colors duration-300"
       style={{
+        backgroundColor: '#050508',
+        backgroundImage: `radial-gradient(circle at 50% 0%, ${activeScheme.primaryHex}18 0%, #050508 50%)`,
         paddingTop: 'env(safe-area-inset-top, 0px)',
         paddingBottom: 'calc(76px + env(safe-area-inset-bottom, 16px))',
       }}
@@ -67,6 +77,7 @@ const MainWorkspace: React.FC = () => {
       <FriendsDrawer />
       <RankingDrawer />
       <NotificationsDrawer />
+      <AuthModal />
       <TmdbSyncModal
         isOpen={isTmdbSyncModalOpen}
         onClose={() => setIsTmdbSyncModalOpen(false)}
