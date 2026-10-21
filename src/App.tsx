@@ -23,8 +23,10 @@ import { AuthModal } from './components/modals/AuthModal';
 import { BottomAppDock } from './components/layout/BottomAppDock';
 import { LuminoriaAnimatedIntro } from './components/intro/LuminoriaAnimatedIntro';
 import { AuthGateScreen } from './screens/AuthGateScreen';
+import { useTvRemoteNavigation } from './hooks/useTvRemoteNavigation';
 
 const MainWorkspace: React.FC = () => {
+  useTvRemoteNavigation();
   const {
     activeNav,
     isTmdbSyncModalOpen,

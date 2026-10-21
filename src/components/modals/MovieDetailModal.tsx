@@ -25,6 +25,15 @@ export const MovieDetailModal: React.FC<MovieDetailModalProps> = ({ movie, onClo
     useLuminoria();
   const [showTrailer, setShowTrailer] = useState(false);
 
+  React.useEffect(() => {
+    if (!movie) return;
+    const handleRemoteBack = () => {
+      onClose();
+    };
+    window.addEventListener('tv-remote-back', handleRemoteBack);
+    return () => window.removeEventListener('tv-remote-back', handleRemoteBack);
+  }, [movie, onClose]);
+
   if (!movie) return null;
 
   const isFav = favoriteIds.includes(movie.id);

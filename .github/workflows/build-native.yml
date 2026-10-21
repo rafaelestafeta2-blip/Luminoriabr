@@ -31,10 +31,9 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: 20
-          cache: 'npm'
 
       - name: Install Node Dependencies
-        run: npm install
+        run: npm install --legacy-peer-deps
 
       - name: Build Web App (Vite)
         run: npm run build
@@ -48,25 +47,26 @@ jobs:
       - name: Setup Android SDK
         uses: android-actions/setup-android@v3
 
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v4
+
       - name: Sync Capacitor Android
         run: |
-          npx @capacitor/cli sync android || true
+          npx @capacitor/cli sync android
 
       - name: Build Android Debug APK
         working-directory: ./android
         run: |
-          if [ -f "gradlew" ]; then
-            chmod +x gradlew
-            ./gradlew assembleDebug --stacktrace
-          else
-            gradle assembleDebug --stacktrace || true
+          if [ ! -f "gradlew" ]; then
+            gradle wrapper
           fi
+          chmod +x gradlew
+          ./gradlew assembleDebug --stacktrace
 
       - name: Locate & Rename Android APK
         run: |
           mkdir -p build-artifacts
           find android/ -name "*.apk" -exec cp {} build-artifacts/LuminoriaPro-v1.0.0-Android.apk \; || true
-          # Fallback check
           if [ ! -f "build-artifacts/LuminoriaPro-v1.0.0-Android.apk" ]; then
             find . -name "*.apk" -exec cp {} build-artifacts/LuminoriaPro-v1.0.0-Android.apk \; || true
           fi
@@ -93,16 +93,15 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: 20
-          cache: 'npm'
 
       - name: Install Node Dependencies
-        run: npm install
+        run: npm install --legacy-peer-deps
 
       - name: Build Web App (Vite)
         run: npm run build
 
       - name: Install Electron & Electron Builder
-        run: npm install electron@^29.0.0 electron-builder@^24.13.3 --save-dev
+        run: npm install electron@^29.0.0 electron-builder@^24.13.3 --save-dev --legacy-peer-deps
 
       - name: Build Windows Executables (.exe)
         run: npx electron-builder --win --x64 --config electron-builder.json
