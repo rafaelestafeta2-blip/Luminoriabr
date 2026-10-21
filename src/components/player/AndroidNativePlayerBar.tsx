@@ -11,6 +11,11 @@ import {
   buildAndroidNativeIntentUrls,
   isPlaceholderStreamUrl,
 } from '../../services/streamUrlHelper';
+import {
+  buildApiUrl,
+  openInAppNativeAndroidPlayer,
+  openNativeAndroidPlayer,
+} from '../../services/apiConfig';
 
 interface AndroidNativePlayerBarProps {
   streamUrl: string;
@@ -28,13 +33,12 @@ export const AndroidNativePlayerBar: React.FC<AndroidNativePlayerBarProps> = ({
   const [resolvedEdgeUrl, setResolvedEdgeUrl] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
 
-  // Resolve 302 redirect in background so Android Intent can open either main or edge CDN
   useEffect(() => {
     setResolvedEdgeUrl(null);
     if (!streamUrl || isPlaceholderStreamUrl(streamUrl)) return;
 
     let cancelled = false;
-    fetch(`/api/resolve-stream?url=${encodeURIComponent(streamUrl)}`)
+    fetch(buildApiUrl(`/api/resolve-stream?url=${encodeURIComponent(streamUrl)}`))
       .then((r) => r.json())
       .then((data) => {
         if (!cancelled && data?.resolvedUrl && data.resolvedUrl !== streamUrl) {
@@ -48,11 +52,8 @@ export const AndroidNativePlayerBar: React.FC<AndroidNativePlayerBarProps> = ({
     };
   }, [streamUrl]);
 
-  // Build native Android intent:// links using original IPTV URL (so user's own IP gets the token)
-  const primaryIntents = buildAndroidNativeIntentUrls(streamUrl, title);
-  const edgeIntents = resolvedEdgeUrl
-    ? buildAndroidNativeIntentUrls(resolvedEdgeUrl, title)
-    : null;
+  const effectiveUrl = resolvedEdgeUrl || streamUrl;
+  const primaryIntents = buildAndroidNativeIntentUrls(effectiveUrl, title);
 
   const handleCopyUrl = async () => {
     try {
@@ -62,16 +63,26 @@ export const AndroidNativePlayerBar: React.FC<AndroidNativePlayerBarProps> = ({
     } catch {}
   };
 
-  const handleIosNativeFullscreen = () => {
-    const video = document.querySelector('video') as HTMLVideoElement | null;
-    if (video) {
-      if ((video as any).webkitEnterFullscreen) {
-        (video as any).webkitEnterFullscreen();
-      } else if (video.requestFullscreen) {
-        video.requestFullscreen().catch(() => {});
-      }
-      video.play().catch(() => {});
+  const handleOpenPrimaryNative = (e: React.MouseEvent) => {
+    const openedInApp = openInAppNativeAndroidPlayer(effectiveUrl, title);
+    if (openedInApp) {
+      e.preventDefault();
+      return;
     }
+    const openedExternal = openNativeAndroidPlayer(effectiveUrl, title, '');
+    if (openedExternal) {
+      e.preventDefault();
+    }
+  };
+
+  const handleOpenVlc = (e: React.MouseEvent) => {
+    const opened = openNativeAndroidPlayer(effectiveUrl, title, 'org.videolan.vlc');
+    if (opened) e.preventDefault();
+  };
+
+  const handleOpenMx = (e: React.MouseEvent) => {
+    const opened = openNativeAndroidPlayer(effectiveUrl, title, 'com.mxtech.videoplayer.ad');
+    if (opened) e.preventDefault();
   };
 
   const isIos = primaryIntents.platform === 'ios';
@@ -98,7 +109,6 @@ export const AndroidNativePlayerBar: React.FC<AndroidNativePlayerBarProps> = ({
           </div>
         </div>
 
-        {/* Switch internal WebView video tag to native OS controls */}
         <button
           type="button"
           onClick={onToggleAndroidNativeMode}
@@ -119,47 +129,38 @@ export const AndroidNativePlayerBar: React.FC<AndroidNativePlayerBarProps> = ({
         </button>
       </div>
 
-      {/* Direct Device Native Deep-Links Row */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2 pt-1">
-        {/* 1. Primary Native Player */}
-        {isIos ? (
-          <button
-            type="button"
-            onClick={handleIosNativeFullscreen}
-            className="px-3.5 py-2.5 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-400 hover:to-teal-400 text-black font-black text-xs flex items-center justify-center gap-2 shadow-[0_0_20px_rgba(16,185,129,0.3)] transition-transform active:scale-95 cursor-pointer"
-          >
-            <Smartphone className="w-4 h-4 shrink-0" />
-            <span className="truncate">AVPlayer iPhone (Tela Cheia)</span>
-          </button>
-        ) : (
-          <a
-            href={primaryIntents.primaryNativeUrl}
-            className="px-3.5 py-2.5 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-400 hover:to-teal-400 text-black font-black text-xs flex items-center justify-center gap-2 shadow-[0_0_20px_rgba(16,185,129,0.3)] transition-transform active:scale-95"
-          >
-            <Smartphone className="w-4 h-4 shrink-0" />
-            <span className="truncate">{primaryIntents.primaryNativeLabel}</span>
-          </a>
-        )}
+        {/* 1. Primary Native Android Hardware Player */}
+        <a
+          href={primaryIntents.primaryNativeUrl}
+          onClick={handleOpenPrimaryNative}
+          className="px-3.5 py-2.5 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-400 hover:to-teal-400 text-black font-black text-xs flex items-center justify-center gap-2 shadow-[0_0_20px_rgba(16,185,129,0.3)] transition-transform active:scale-95 cursor-pointer"
+        >
+          <Smartphone className="w-4 h-4 shrink-0" />
+          <span className="truncate">{primaryIntents.primaryNativeLabel}</span>
+        </a>
 
-        {/* 2. VLC Player (iOS or Android) */}
+        {/* 2. VLC Player */}
         <a
           href={primaryIntents.vlcUrl}
-          className="px-3.5 py-2.5 rounded-xl bg-amber-500/20 hover:bg-amber-500/30 border border-amber-500/40 text-amber-300 font-bold text-xs flex items-center justify-center gap-2 transition-colors"
+          onClick={handleOpenVlc}
+          className="px-3.5 py-2.5 rounded-xl bg-amber-500/20 hover:bg-amber-500/30 border border-amber-500/40 text-amber-300 font-bold text-xs flex items-center justify-center gap-2 transition-colors cursor-pointer"
         >
           <ExternalLink className="w-3.5 h-3.5 shrink-0" />
           <span className="truncate">{primaryIntents.vlcLabel}</span>
         </a>
 
-        {/* 3. Secondary Native Player (Infuse on iOS / MX Player on Android) */}
+        {/* 3. MX Player */}
         <a
           href={primaryIntents.secondaryPlayerUrl}
-          className="px-3.5 py-2.5 rounded-xl bg-blue-500/20 hover:bg-blue-500/30 border border-blue-500/40 text-blue-300 font-bold text-xs flex items-center justify-center gap-2 transition-colors"
+          onClick={handleOpenMx}
+          className="px-3.5 py-2.5 rounded-xl bg-blue-500/20 hover:bg-blue-500/30 border border-blue-500/40 text-blue-300 font-bold text-xs flex items-center justify-center gap-2 transition-colors cursor-pointer"
         >
           <Tv className="w-3.5 h-3.5 shrink-0" />
           <span className="truncate">{primaryIntents.secondaryPlayerLabel}</span>
         </a>
 
-        {/* 4. Copy Direct Stream Link or Direct Edge Route */}
+        {/* 4. Copy Direct Stream Link */}
         <button
           type="button"
           onClick={handleCopyUrl}
@@ -179,17 +180,16 @@ export const AndroidNativePlayerBar: React.FC<AndroidNativePlayerBarProps> = ({
         </button>
       </div>
 
-      {edgeIntents && (
+      {resolvedEdgeUrl && (
         <div className="flex items-center justify-between gap-2 pt-1 text-[11px] text-white/60 border-t border-white/10">
-          <span className="truncate">
-            Rota CDN Direta detectada para este filme
-          </span>
-          <a
-            href={edgeIntents.systemVideoPlayerIntent}
-            className="text-cyan-400 hover:text-cyan-300 font-bold underline shrink-0"
+          <span className="truncate">Rota CDN Direta identificada para este conteúdo</span>
+          <button
+            type="button"
+            onClick={handleOpenPrimaryNative}
+            className="text-cyan-400 hover:text-cyan-300 font-bold underline shrink-0 cursor-pointer"
           >
-            Abrir Rota Direta CDN no Android →
-          </a>
+            Abrir Rota Direta no Player Nativo →
+          </button>
         </div>
       )}
     </div>

@@ -1,4 +1,5 @@
 import { Channel, EpgProgram } from '../types/luminoria';
+import { buildApiUrl } from './apiConfig';
 
 export interface DetailedEpgProgram extends EpgProgram {
   description: string;
@@ -176,7 +177,7 @@ export async function fetchChannelEpgSchedule(
   const m = channel.id.match(/xt-live-(\d+)/);
   if (m && m[1]) {
     try {
-      const res = await fetch(`/api/xtream-epg?streamId=${m[1]}`);
+      const res = await fetch(buildApiUrl(`/api/xtream-epg?streamId=${m[1]}`));
       if (res.ok) {
         const data = await res.json();
         if (data?.ok && Array.isArray(data.programs) && data.programs.length > 0) {

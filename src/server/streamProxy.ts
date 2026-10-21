@@ -185,6 +185,9 @@ function forwardStream(
         });
         upstreamRes.on('end', () => {
           const baseOrigin = `${parsed.protocol}//${parsed.host}`;
+          const reqHost = req.get('host');
+          const forwardedProto = (req.headers['x-forwarded-proto'] as string) || req.protocol || 'https';
+          const proxyBase = reqHost ? `${forwardedProto.split(',')[0].trim()}://${reqHost}` : '';
           const rewritten = m3u8Body
             .split('\n')
             .map((line) => {
@@ -195,7 +198,7 @@ function forwardStream(
                 : trimmed.startsWith('/')
                 ? `${baseOrigin}${trimmed}`
                 : new URL(trimmed, currentUrl).toString();
-              return `/api/stream-proxy?url=${encodeURIComponent(absUrl)}`;
+              return `${proxyBase}/api/stream-proxy?url=${encodeURIComponent(absUrl)}`;
             })
             .join('\n');
 

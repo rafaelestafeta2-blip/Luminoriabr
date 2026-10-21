@@ -14,6 +14,18 @@ async function startServer() {
 
   app.use(express.json({ limit: '50mb' }));
 
+  // Allow cross-origin requests from packaged Android APK (https://localhost) and Desktop EXE
+  app.use('/api', (req, res, next) => {
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+    res.setHeader('Access-Control-Allow-Headers', 'Range, Content-Type, Authorization');
+    res.setHeader('Access-Control-Expose-Headers', 'Content-Range, Content-Length, Accept-Ranges');
+    if (req.method === 'OPTIONS') {
+      return res.sendStatus(204);
+    }
+    next();
+  });
+
   // API Proxy Routes for M3U and Xtream Codes (bypasses browser CORS & self-signed SSL)
   app.use('/api', m3uRouter);
 

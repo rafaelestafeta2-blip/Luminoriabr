@@ -1,4 +1,9 @@
 import type { Channel, SeriesEpisodeItem, VodItem } from '../types/luminoria.ts';
+import { buildApiUrl, isNativeAppRuntime } from './apiConfig';
+import {
+  fetchClientXtreamDetails,
+  getClientXtreamCatalog,
+} from './xtreamClientEngine';
 
 const FALLBACK_TRAILERS: Record<string, string> = {
   'gladiador ii': '4rgYUipGJNo',
@@ -15,12 +20,6 @@ const FALLBACK_TRAILERS: Record<string, string> = {
   'a substância': 'LNlrGhBpYjc',
   'duna: parte dois': 'Way9Dexny3w',
   'duna': 'Way9Dexny3w',
-  'capital humano': 'PJn01e2Qs00',
-  'contra o relógio': '6ZfuNTqbHE8',
-  'homem-aranha: um novo dia': 'JfVOs4VSpmA',
-  'sully: o herói do rio hudson': 'mjKEXxO2KNE',
-  'a hora do mal': 'b9EkMc79ZSU',
-  'controle absoluto': '8hP9D6kZseM',
   'tulsa king': 'aaQSScwZPbA',
   'reacher': 'GSycMV-_Csw',
   'origem': 'pDHqAj4eJcM',
@@ -34,7 +33,7 @@ export function getFallbackYoutubeTrailerId(title: string): string {
   for (const [k, v] of Object.entries(FALLBACK_TRAILERS)) {
     if (key.includes(k)) return v;
   }
-  return '4rgYUipGJNo'; // Official Cinema 4K Trailer fallback
+  return '4rgYUipGJNo';
 }
 
 export interface FullXtreamSyncResponse {
@@ -58,56 +57,79 @@ export async function fetchOfficialEliteDnsCatalog(
   username: string = 'Rafalaila',
   password: string = '1662167'
 ): Promise<FullXtreamSyncResponse | null> {
+  // If running inside native Android APK, use direct native client engine
+  if (isNativeAppRuntime()) {
+    try {
+      const cat = await getClientXtreamCatalog(host, username, password);
+      return {
+        ok: true,
+        channels: cat.allChannels.slice(0, 1200),
+        movies: cat.allMovies.slice(0, 2600),
+        series: cat.allSeries.slice(0, 1800),
+        stats: {
+          totalStreamsFound: cat.totalStreamsCount,
+          totalChannelsFound: cat.allChannels.length,
+          totalMoviesFound: cat.allMovies.length,
+          totalSeriesFound: cat.allSeries.length,
+          importedChannels: Math.min(1200, cat.allChannels.length),
+          importedMovies: Math.min(2600, cat.allMovies.length),
+          importedSeries: Math.min(1800, cat.allSeries.length),
+        },
+      };
+    } catch (err) {
+      console.warn('Native client catalog sync error:', err);
+    }
+  }
+
+  // Web backend route fallback
   try {
     const res = await fetch(
-      `/api/xtream-connect?host=${encodeURIComponent(host)}&username=${encodeURIComponent(
-        username
-      )}&password=${encodeURIComponent(password)}`
+      buildApiUrl(
+        `/api/xtream-connect?host=${encodeURIComponent(host)}&username=${encodeURIComponent(
+          username
+        )}&password=${encodeURIComponent(password)}`
+      )
     );
-    if (!res.ok) return null;
-    const data = await res.json();
-    if (data && data.ok) {
-      return data as FullXtreamSyncResponse;
+    if (res.ok) {
+      const data = await res.json();
+      if (data && data.ok) return data as FullXtreamSyncResponse;
     }
-  } catch (err) {
-    console.warn('Falha ao sincronizar catálogo Xtream completo:', err);
+  } catch {}
+
+  // Fallback to client engine if backend fails
+  try {
+    const cat = await getClientXtreamCatalog(host, username, password);
+    return {
+      ok: true,
+      channels: cat.allChannels.slice(0, 1200),
+      movies: cat.allMovies.slice(0, 2600),
+      series: cat.allSeries.slice(0, 1800),
+      stats: {
+        totalStreamsFound: cat.totalStreamsCount,
+        totalChannelsFound: cat.allChannels.length,
+        totalMoviesFound: cat.allMovies.length,
+        totalSeriesFound: cat.allSeries.length,
+        importedChannels: Math.min(1200, cat.allChannels.length),
+        importedMovies: Math.min(2600, cat.allMovies.length),
+        importedSeries: Math.min(1800, cat.allSeries.length),
+      },
+    };
+  } catch {
+    return null;
   }
-  return null;
 }
 
 export async function enrichVodWithTmdbDetails(vod: VodItem): Promise<VodItem> {
-  try {
-    const params = new URLSearchParams({
-      title: vod.title,
-      mediaType: vod.mediaType === 'series' ? 'series' : 'movie',
-    });
-    if (vod.xtreamStreamId) params.set('vodId', String(vod.xtreamStreamId));
-    if (vod.xtreamSeriesId) params.set('seriesId', String(vod.xtreamSeriesId));
+  const fallbackTrailer = vod.youtubeTrailerId || getFallbackYoutubeTrailerId(vod.title);
 
-    const res = await fetch(`/api/xtream-details?${params.toString()}`);
-    if (!res.ok) {
-      return {
-        ...vod,
-        youtubeTrailerId: vod.youtubeTrailerId || getFallbackYoutubeTrailerId(vod.title),
-      };
-    }
-
-    const json = await res.json();
-    const d = json?.details;
-    if (!d) {
-      return {
-        ...vod,
-        youtubeTrailerId: vod.youtubeTrailerId || getFallbackYoutubeTrailerId(vod.title),
-      };
-    }
-
+  const applyDetails = (d: any): VodItem => {
+    if (!d) return { ...vod, youtubeTrailerId: fallbackTrailer };
     const actors: string[] =
-      Array.isArray(d.actorsList) && d.actorsList.length > 0
-        ? d.actorsList
-        : vod.actorsList || vod.cast;
-
+      Array.isArray(d.actorsList) && d.actorsList.length > 0 ? d.actorsList : vod.actorsList || vod.cast;
     const episodes: SeriesEpisodeItem[] | undefined =
       Array.isArray(d.episodes) && d.episodes.length > 0 ? d.episodes : vod.episodes;
+    const nextStream = d.firstEpisodeStreamUrl || vod.streamUrl;
+    const hasReal = Boolean(nextStream && !nextStream.startsWith('lumin://'));
 
     return {
       ...vod,
@@ -120,17 +142,42 @@ export async function enrichVodWithTmdbDetails(vod: VodItem): Promise<VodItem> {
       actorsList: actors,
       duration: d.duration || vod.duration,
       rating: d.rating || vod.rating,
-      youtubeTrailerId:
-        d.youtubeTrailerId || vod.youtubeTrailerId || getFallbackYoutubeTrailerId(vod.title),
+      youtubeTrailerId: d.youtubeTrailerId || fallbackTrailer,
       episodes,
-      streamUrl: d.firstEpisodeStreamUrl || vod.streamUrl,
+      streamUrl: nextStream,
+      hasM3uStream: hasReal ? true : vod.hasM3uStream,
+      isComingSoon: hasReal ? false : vod.isComingSoon,
     };
-  } catch {
-    return {
-      ...vod,
-      youtubeTrailerId: vod.youtubeTrailerId || getFallbackYoutubeTrailerId(vod.title),
-    };
+  };
+
+  if (isNativeAppRuntime()) {
+    try {
+      const details = await fetchClientXtreamDetails(vod.xtreamStreamId, vod.xtreamSeriesId);
+      if (details) return applyDetails(details);
+    } catch {}
   }
+
+  try {
+    const params = new URLSearchParams({
+      title: vod.title,
+      mediaType: vod.mediaType === 'series' ? 'series' : 'movie',
+    });
+    if (vod.xtreamStreamId) params.set('vodId', String(vod.xtreamStreamId));
+    if (vod.xtreamSeriesId) params.set('seriesId', String(vod.xtreamSeriesId));
+
+    const res = await fetch(buildApiUrl(`/api/xtream-details?${params.toString()}`));
+    if (res.ok) {
+      const json = await res.json();
+      if (json?.details) return applyDetails(json.details);
+    }
+  } catch {}
+
+  try {
+    const details = await fetchClientXtreamDetails(vod.xtreamStreamId, vod.xtreamSeriesId);
+    if (details) return applyDetails(details);
+  } catch {}
+
+  return { ...vod, youtubeTrailerId: fallbackTrailer };
 }
 
 export async function searchFullServerCatalog(params: {
@@ -139,21 +186,7 @@ export async function searchFullServerCatalog(params: {
   category?: string;
   offset?: number;
   limit?: number;
-}): Promise<{
-  movies: VodItem[];
-  series: VodItem[];
-  channels: Channel[];
-  hasMoreMovies?: boolean;
-  hasMoreSeries?: boolean;
-  totals?: {
-    totalMovies: number;
-    totalSeries: number;
-    totalChannels: number;
-    totalStreams: number;
-    matchedMovies?: number;
-    matchedSeries?: number;
-  };
-} | null> {
+}): Promise<any | null> {
   try {
     const sp = new URLSearchParams({
       q: params.q || '',
@@ -162,11 +195,33 @@ export async function searchFullServerCatalog(params: {
       offset: String(params.offset || 0),
       limit: String(params.limit || 120),
     });
-    const res = await fetch(`/api/xtream-search?${sp.toString()}`);
-    if (!res.ok) return null;
-    const data = await res.json();
-    if (data && data.ok) return data;
+    const res = await fetch(buildApiUrl(`/api/xtream-search?${sp.toString()}`));
+    if (res.ok) {
+      const data = await res.json();
+      if (data && data.ok) return data;
+    }
   } catch {}
-  return null;
-}
 
+  try {
+    const cat = await getClientXtreamCatalog();
+    const query = (params.q || '').toLowerCase().trim();
+    const isMov = params.type === 'all' || params.type === 'movie';
+    const isSer = params.type === 'all' || params.type === 'series';
+    const isLiv = params.type === 'all' || params.type === 'live';
+
+    return {
+      ok: true,
+      movies: isMov ? cat.allMovies.filter((m) => !query || m.title.toLowerCase().includes(query)).slice(0, 120) : [],
+      series: isSer ? cat.allSeries.filter((s) => !query || s.title.toLowerCase().includes(query)).slice(0, 120) : [],
+      channels: isLiv ? cat.allChannels.filter((c) => !query || c.name.toLowerCase().includes(query)).slice(0, 120) : [],
+      totals: {
+        totalMovies: cat.allMovies.length,
+        totalSeries: cat.allSeries.length,
+        totalChannels: cat.allChannels.length,
+        totalStreams: cat.totalStreamsCount,
+      },
+    };
+  } catch {
+    return null;
+  }
+}

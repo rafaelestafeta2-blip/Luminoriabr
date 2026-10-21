@@ -5,6 +5,7 @@ import {
   convertM3UToVodItem,
   type RawM3UItem,
 } from './m3uClassifier.ts';
+import { buildApiUrl } from './apiConfig';
 
 export interface UnifiedM3UResult {
   playlistName: string;
@@ -151,7 +152,7 @@ export function extractXtreamCredentials(url: string): {
  * Fetches an M3U playlist using backend proxy to bypass CORS & self-signed SSL certs
  */
 export async function fetchM3UFromUrl(url: string): Promise<string> {
-  const proxyUrl = `/api/m3u-proxy?url=${encodeURIComponent(url.trim())}`;
+  const proxyUrl = buildApiUrl(`/api/m3u-proxy?url=${encodeURIComponent(url.trim())}`);
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), 40000);
 
@@ -190,9 +191,11 @@ export async function tryXtreamConnectFromUrl(url: string): Promise<any | null> 
 
   try {
     const res = await fetch(
-      `/api/xtream-connect?host=${encodeURIComponent(creds.host)}&username=${encodeURIComponent(
-        creds.username
-      )}&password=${encodeURIComponent(creds.password)}`
+      buildApiUrl(
+        `/api/xtream-connect?host=${encodeURIComponent(creds.host)}&username=${encodeURIComponent(
+          creds.username
+        )}&password=${encodeURIComponent(creds.password)}`
+      )
     );
     if (res.ok) {
       return await res.json();

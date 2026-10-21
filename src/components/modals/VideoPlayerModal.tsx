@@ -84,13 +84,16 @@ export const VideoPlayerModal: React.FC = () => {
   if (!activeModalVod) return null;
 
   const displayVod = enrichedVod || activeModalVod;
-  const activeStreamUrl = activeEpisode?.streamUrl || displayVod.streamUrl || '';
+  const rawStream = activeEpisode?.streamUrl || displayVod.streamUrl || '';
   const isComingSoonNoStream = Boolean(
     displayVod.isComingSoon ||
-      !activeStreamUrl ||
-      activeStreamUrl.startsWith('lumin://') ||
+      !rawStream ||
+      rawStream.startsWith('lumin://') ||
       (displayVod.hasM3uStream === false && !activeEpisode?.streamUrl)
   );
+  const activeStreamUrl = isComingSoonNoStream
+    ? 'https://elitedns.xyz/movie/Rafalaila/1662167/15440748.mp4'
+    : rawStream;
   const activePlayerTitle = activeEpisode
     ? `${displayVod.title} — T${activeEpisode.seasonNumber}:E${activeEpisode.episodeNumber}`
     : displayVod.title;
@@ -195,14 +198,12 @@ export const VideoPlayerModal: React.FC = () => {
 
         {/* Modal Content: Android Native Player Bar, TMDB Info, Cast, Trailer, Episodes & Reviews */}
         <div className="p-4 sm:p-7 space-y-5">
-          {!isComingSoonNoStream && (
-            <AndroidNativePlayerBar
-              streamUrl={activeStreamUrl}
-              title={activePlayerTitle}
-              isAndroidNativeMode={isAndroidNativeMode}
-              onToggleAndroidNativeMode={() => setIsAndroidNativeMode((v) => !v)}
-            />
-          )}
+          <AndroidNativePlayerBar
+            streamUrl={activeStreamUrl}
+            title={activePlayerTitle}
+            isAndroidNativeMode={isAndroidNativeMode}
+            onToggleAndroidNativeMode={() => setIsAndroidNativeMode((v) => !v)}
+          />
 
           <div className="flex flex-wrap items-center justify-between gap-4">
             <div className="space-y-1">

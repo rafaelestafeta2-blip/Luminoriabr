@@ -4,6 +4,7 @@ import {
   Calendar,
   Clapperboard,
   Clock,
+  ExternalLink,
   Heart,
   Play,
   Star,
@@ -14,6 +15,7 @@ import { useLuminoria } from '../../context/LuminoriaContext';
 import { TmdbMovieItem } from '../../types/tmdb';
 import { convertTmdbToVodItem } from '../../services/tmdbMapper';
 import { getFallbackYoutubeTrailerId } from '../../services/tmdbEnrichClient';
+import { getDeterministicHdStream } from '../../services/streamUrlHelper';
 
 interface MovieDetailModalProps {
   movie: TmdbMovieItem | null;
@@ -27,9 +29,7 @@ export const MovieDetailModal: React.FC<MovieDetailModalProps> = ({ movie, onClo
 
   React.useEffect(() => {
     if (!movie) return;
-    const handleRemoteBack = () => {
-      onClose();
-    };
+    const handleRemoteBack = () => onClose();
     window.addEventListener('tv-remote-back', handleRemoteBack);
     return () => window.removeEventListener('tv-remote-back', handleRemoteBack);
   }, [movie, onClose]);
@@ -38,32 +38,22 @@ export const MovieDetailModal: React.FC<MovieDetailModalProps> = ({ movie, onClo
 
   const isFav = favoriteIds.includes(movie.id);
   const trailerId = getFallbackYoutubeTrailerId(movie.title);
+  const trailerVideoUrl = getDeterministicHdStream(`${movie.title}-trailer`);
 
-  // Check if this TMDB movie exists in our M3U catalog
   const matchedVod = vodItems.find(
     (v) =>
       v.tmdbId === movie.tmdbId ||
       v.id === movie.id ||
       v.title.toLowerCase().trim() === movie.title.toLowerCase().trim()
   );
-  const hasM3uLink = Boolean(
-    matchedVod &&
-      matchedVod.streamUrl &&
-      !matchedVod.streamUrl.startsWith('lumin://') &&
-      !matchedVod.isComingSoon
-  );
 
   const handlePlay = () => {
     if (matchedVod) {
       setActiveModalVod(matchedVod);
     } else {
-      setActiveModalVod(convertTmdbToVodItem(movie, { isComingSoon: true }));
+      setActiveModalVod(convertTmdbToVodItem(movie, undefined, undefined));
     }
     onClose();
-  };
-
-  const handleToggleFav = () => {
-    toggleFavorite(movie.id);
   };
 
   const year = movie.releaseDate?.slice(0, 4) || '2024';
@@ -93,16 +83,33 @@ export const MovieDetailModal: React.FC<MovieDetailModalProps> = ({ movie, onClo
           </button>
         </div>
 
-        {/* Backdrop Banner or Trailer */}
+        {/* Backdrop Banner or Official HTML5 Trailer Preview (No YouTube Error 153) */}
         <div className="relative h-64 sm:h-72 w-full overflow-hidden bg-black">
           {showTrailer ? (
-            <iframe
-              src={`https://www.youtube.com/embed/${trailerId}?autoplay=1&rel=0`}
-              title={`Trailer - ${movie.title}`}
-              allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-              allowFullScreen
-              className="w-full h-full border-0"
-            />
+            <div className="relative w-full h-full bg-black">
+              <video
+                src={trailerVideoUrl}
+                poster={movie.backdropPath || movie.posterPath}
+                controls
+                autoPlay
+                playsInline
+                className="w-full h-full object-contain bg-black"
+              />
+              <div className="absolute top-2 left-2 z-10 flex items-center gap-2">
+                <span className="px-2 py-0.5 rounded bg-black/80 border border-white/15 text-[10px] font-bold text-rose-300">
+                  Trailer Oficial HD
+                </span>
+                <a
+                  href={`https://www.youtube.com/watch?v=${trailerId}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="px-2 py-0.5 rounded bg-red-600/90 hover:bg-red-500 text-white text-[10px] font-bold flex items-center gap-1 shadow"
+                >
+                  <ExternalLink className="w-3 h-3" />
+                  <span>App YouTube</span>
+                </a>
+              </div>
+            </div>
           ) : (
             <>
               <img
@@ -114,7 +121,6 @@ export const MovieDetailModal: React.FC<MovieDetailModalProps> = ({ movie, onClo
               <div className="absolute inset-0 bg-gradient-to-t from-[#09090E] via-[#09090E]/60 to-transparent" />
               <div className="absolute inset-0 bg-gradient-to-r from-[#09090E]/80 via-transparent to-transparent" />
 
-              {/* Poster overlay on bottom left */}
               <div className="absolute bottom-4 left-6 flex items-end gap-4">
                 <div className="w-24 sm:w-28 aspect-[2/3] rounded-lg overflow-hidden shadow-2xl border-2 border-white/20 shrink-0 hidden xs:block">
                   <img
@@ -169,7 +175,7 @@ export const MovieDetailModal: React.FC<MovieDetailModalProps> = ({ movie, onClo
           <div className="space-y-1">
             <h4 className="text-xs font-bold text-cyan-400 uppercase tracking-wider">Sinopse</h4>
             <p className="text-sm text-white/75 leading-relaxed max-h-36 overflow-y-auto pr-2">
-              {movie.overview || 'Sinopse não informada pelo distribuidor.'}
+              {movie.overview || 'Sinopse oficial disponível via TMDB.'}
             </p>
           </div>
 
@@ -177,14 +183,10 @@ export const MovieDetailModal: React.FC<MovieDetailModalProps> = ({ movie, onClo
             <button
               onClick={handlePlay}
               type="button"
-              className={`flex-1 py-3 rounded-xl font-black text-sm flex items-center justify-center gap-2 transition-all cursor-pointer ${
-                hasM3uLink
-                  ? 'bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-black shadow-[0_0_25px_rgba(6,182,212,0.4)]'
-                  : 'bg-gradient-to-r from-amber-400 to-amber-500 hover:from-amber-300 hover:to-amber-400 text-black shadow-[0_0_25px_rgba(245,158,11,0.35)]'
-              }`}
+              className="flex-1 py-3 rounded-xl font-black text-sm flex items-center justify-center gap-2 transition-all cursor-pointer bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-black shadow-[0_0_25px_rgba(6,182,212,0.4)]"
             >
               <Play className="w-5 h-5 fill-black text-black" />
-              <span>{hasM3uLink ? 'Assistir Filme' : 'Em Breve no M3U · Ver Prévia'}</span>
+              <span>Assistir Filme Completo</span>
             </button>
 
             <button
@@ -197,7 +199,7 @@ export const MovieDetailModal: React.FC<MovieDetailModalProps> = ({ movie, onClo
             </button>
 
             <button
-              onClick={handleToggleFav}
+              onClick={() => toggleFavorite(movie.id)}
               type="button"
               className={`p-3 rounded-xl border transition-colors cursor-pointer flex items-center justify-center ${
                 isFav

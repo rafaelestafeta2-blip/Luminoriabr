@@ -106,12 +106,12 @@ export const PlayerControlsOverlay: React.FC<PlayerControlsOverlayProps> = ({
             </p>
           </div>
         </div>
-        {onClose && (
+        {isFullscreen && onClose && (
           <button
             onClick={onClose}
             type="button"
             className="p-2 rounded-full bg-black/60 hover:bg-black/90 text-white border border-white/10 transition-colors cursor-pointer"
-            aria-label="Fechar player"
+            aria-label="Fechar player tela cheia"
           >
             <X className="w-5 h-5" />
           </button>

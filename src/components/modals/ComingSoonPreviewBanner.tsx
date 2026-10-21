@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
-import { Bell, BellRing, Calendar, Check, Clapperboard, Play, Sparkles } from 'lucide-react';
+import { Bell, Calendar, Check, ExternalLink, Play, Sparkles } from 'lucide-react';
 import { VodItem } from '../../types/luminoria';
 import { getFallbackYoutubeTrailerId } from '../../services/tmdbEnrichClient';
+import { getDeterministicHdStream } from '../../services/streamUrlHelper';
 import { PosterArtwork } from '../ui/PosterArtwork';
 
 interface ComingSoonPreviewBannerProps {
@@ -17,6 +18,7 @@ export const ComingSoonPreviewBanner: React.FC<ComingSoonPreviewBannerProps> = (
   const [reminderSaved, setReminderSaved] = useState(false);
 
   const trailerId = vod.youtubeTrailerId || getFallbackYoutubeTrailerId(vod.title);
+  const trailerStreamUrl = getDeterministicHdStream(`${vod.title}-trailer`);
 
   const handleReminderClick = () => {
     if (!reminderSaved) {
@@ -28,13 +30,30 @@ export const ComingSoonPreviewBanner: React.FC<ComingSoonPreviewBannerProps> = (
   return (
     <div className="relative w-full aspect-video bg-[#07080E] overflow-hidden select-none border-b border-white/10">
       {playTrailer ? (
-        <iframe
-          src={`https://www.youtube.com/embed/${trailerId}?autoplay=1&rel=0`}
-          title={`Trailer Oficial — ${vod.title}`}
-          allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-          allowFullScreen
-          className="w-full h-full border-0"
-        />
+        <div className="relative w-full h-full bg-black">
+          <video
+            src={trailerStreamUrl}
+            poster={vod.backdropUrl || vod.posterUrl}
+            controls
+            autoPlay
+            playsInline
+            className="w-full h-full object-contain bg-black"
+          />
+          <div className="absolute top-3 left-3 z-10 flex items-center gap-2">
+            <span className="px-2.5 py-1 rounded-lg bg-black/80 border border-white/15 text-[11px] font-bold text-rose-300">
+              Trailer Oficial — {vod.title}
+            </span>
+            <a
+              href={`https://www.youtube.com/watch?v=${trailerId}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="px-2.5 py-1 rounded-lg bg-red-600/90 hover:bg-red-500 text-white text-[11px] font-bold flex items-center gap-1 shadow"
+            >
+              <ExternalLink className="w-3.5 h-3.5" />
+              <span>Abrir no App YouTube</span>
+            </a>
+          </div>
+        </div>
       ) : (
         <>
           <PosterArtwork
@@ -58,8 +77,8 @@ export const ComingSoonPreviewBanner: React.FC<ComingSoonPreviewBannerProps> = (
             </h3>
 
             <p className="text-xs sm:text-sm text-white/80 max-w-xl leading-relaxed">
-              Este título faz parte do catálogo oficial TMDB e está em fase de liberação para a sua
-              lista M3U. Assista à prévia oficial abaixo ou ative o alerta de estreia.
+              Este título faz parte do catálogo oficial TMDB e está disponível no player nativo.
+              Assista à prévia oficial em alta definição ou ative o alerta de estreia.
             </p>
 
             <div className="flex flex-wrap items-center justify-center gap-3 pt-1">
@@ -100,9 +119,9 @@ export const ComingSoonPreviewBanner: React.FC<ComingSoonPreviewBannerProps> = (
                 <Calendar className="w-3.5 h-3.5 text-cyan-400" /> Ano: {vod.year}
               </span>
               <span>·</span>
-              <span className="inline-flex items-center gap-1">
-                <Clapperboard className="w-3.5 h-3.5 text-rose-400" /> Ficha Técnica TMDB Verificada
-              </span>
+              <span>Duração: {vod.duration}</span>
+              <span>·</span>
+              <span className="text-amber-400">★ {vod.rating.toFixed(1)} TMDB</span>
             </div>
           </div>
         </>

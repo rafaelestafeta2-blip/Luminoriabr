@@ -149,18 +149,38 @@ export async function fetchXtreamMediaDetails(params: {
 
   let vodId = params.vodId;
   let seriesId = params.seriesId;
+  let matchedMovieStreamUrl: string | undefined;
+
+  const normalizeTitleKey = (str: string) =>
+    str
+      .toLowerCase()
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .replace(/\biii\b/g, '3')
+      .replace(/\bii\b/g, '2')
+      .replace(/\biv\b/g, '4')
+      .replace(/[^a-z0-9\s]/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim();
 
   // If no explicit ID was passed, try matching by title in the cached 37,613-item catalog
   if (!vodId && !seriesId && params.title) {
     try {
       const cat = await getOrLoadXtreamCatalog(cleanHost, params.username, params.password);
-      const normTitle = params.title.toLowerCase().trim();
+      const normTitle = normalizeTitleKey(params.title);
       if (params.mediaType === 'series') {
-        const foundSer = cat.allSeries.find((s) => s.title.toLowerCase() === normTitle);
+        const foundSer =
+          cat.allSeries.find((s) => normalizeTitleKey(s.title) === normTitle) ||
+          cat.allSeries.find((s) => normalizeTitleKey(s.title).includes(normTitle));
         if (foundSer?.xtreamSeriesId) seriesId = foundSer.xtreamSeriesId;
       } else {
-        const foundMov = cat.allMovies.find((m) => m.title.toLowerCase() === normTitle);
-        if (foundMov?.xtreamStreamId) vodId = foundMov.xtreamStreamId;
+        const foundMov =
+          cat.allMovies.find((m) => normalizeTitleKey(m.title) === normTitle) ||
+          cat.allMovies.find((m) => normalizeTitleKey(m.title).includes(normTitle));
+        if (foundMov?.xtreamStreamId) {
+          vodId = foundMov.xtreamStreamId;
+          matchedMovieStreamUrl = foundMov.streamUrl;
+        }
       }
     } catch {}
   }
@@ -223,6 +243,12 @@ export async function fetchXtreamMediaDetails(params: {
   if (vodId) {
     const data = await fetchXtreamApiJson(`${authUrl}&action=get_vod_info&vod_id=${vodId}`);
     const info = data?.info || {};
+    const movieData = data?.movie_data || {};
+    const ext = movieData.container_extension || 'mp4';
+    const resolvedMovieStreamUrl =
+      matchedMovieStreamUrl ||
+      `${cleanHost}/movie/${params.username}/${params.password}/${vodId}.${ext}`;
+
     const actors = String(info.actors || info.cast || '')
       .split(',')
       .map((s) => s.trim())
@@ -242,6 +268,7 @@ export async function fetchXtreamMediaDetails(params: {
       duration: info.duration || (info.episode_run_time ? `${info.episode_run_time} min` : undefined),
       rating: Number(info.rating) > 0 ? Number(Number(info.rating).toFixed(1)) : undefined,
       youtubeTrailerId: extractYoutubeId(info.youtube_trailer),
+      firstEpisodeStreamUrl: resolvedMovieStreamUrl,
     };
     detailsCache.set(cacheKey, enriched);
     return enriched;

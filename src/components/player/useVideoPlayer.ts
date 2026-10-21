@@ -4,7 +4,7 @@ import mpegts from 'mpegts.js';
 import { PlaybackRate, VideoQuality } from './playerTypes';
 import {
   getDeterministicHdStream,
-  REAL_HD_WEBM_STREAMS,
+  isPlaceholderStreamUrl,
   resolveSafeStreamUrl,
 } from '../../services/streamUrlHelper';
 
@@ -18,6 +18,7 @@ export function useVideoPlayer(
   const controlsTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const hlsRef = useRef<Hls | null>(null);
   const mpegtsRef = useRef<any>(null);
+  const attemptStageRef = useRef<number>(0);
 
   const [isPlaying, setIsPlaying] = useState(false);
   const [currentTime, setCurrentTime] = useState(0);
@@ -37,12 +38,14 @@ export function useVideoPlayer(
 
   const destroyEngines = () => {
     if (hlsRef.current) {
-      hlsRef.current.destroy();
+      try {
+        hlsRef.current.destroy();
+      } catch {}
       hlsRef.current = null;
     }
     if (mpegtsRef.current) {
       try {
-        mpegtsRef.current. unload();
+        mpegtsRef.current.unload();
         mpegtsRef.current.detachMediaElement();
         mpegtsRef.current.destroy();
       } catch {}
@@ -50,42 +53,79 @@ export function useVideoPlayer(
     }
   };
 
-  // 1. Reset currentSrc when prop streamUrl changes
+  // 1. Reset currentSrc when prop streamUrl or title changes
   useEffect(() => {
+    attemptStageRef.current = 0;
     const safeUrl = resolveSafeStreamUrl(streamUrl, title);
     setHasError(false);
     setIsBuffering(true);
     setCurrentSrc(safeUrl);
   }, [streamUrl, title]);
 
+  const advanceFallbackOrError = () => {
+    destroyEngines();
+    const rawClean = (streamUrl || '').trim();
+    const hasRealRaw = rawClean && !isPlaceholderStreamUrl(rawClean);
+
+    // Stage 0 -> Stage 1: If proxy URL failed, try direct raw URL (works natively inside Android APK!)
+    if (attemptStageRef.current === 0 && hasRealRaw && currentSrc !== rawClean) {
+      attemptStageRef.current = 1;
+      setHasError(false);
+      setIsBuffering(true);
+      setCurrentSrc(rawClean);
+      return;
+    }
+
+    // Stage 1 -> Stage 2: Fall back to verified HD HLS stream so player always starts playing
+    const hdFallback = getDeterministicHdStream(title || streamUrl || 'default');
+    if (attemptStageRef.current < 2 && currentSrc !== hdFallback) {
+      attemptStageRef.current = 2;
+      setHasError(false);
+      setIsBuffering(true);
+      setCurrentSrc(hdFallback);
+      return;
+    }
+
+    setHasError(true);
+    setIsBuffering(false);
+    setIsPlaying(false);
+  };
+
   // 2. Attach appropriate media engine (HLS, MPEG-TS, or Native HTML5) whenever currentSrc updates
   useEffect(() => {
     const video = videoRef.current;
     if (!video || !currentSrc) return;
 
+    let cancelled = false;
     destroyEngines();
     setIsBuffering(true);
 
     const attemptAutoPlay = () => {
-      if (!videoRef.current) return;
+      if (cancelled || !videoRef.current) return;
       videoRef.current
         .play()
         .then(() => {
-          setIsPlaying(true);
-          setIsBuffering(false);
+          if (!cancelled) {
+            setIsPlaying(true);
+            setIsBuffering(false);
+            setHasError(false);
+          }
         })
         .catch(() => {
-          if (!videoRef.current) return;
+          if (cancelled || !videoRef.current) return;
           videoRef.current.muted = true;
           setIsMuted(true);
           videoRef.current
             .play()
             .then(() => {
-              setIsPlaying(true);
-              setIsBuffering(false);
+              if (!cancelled) {
+                setIsPlaying(true);
+                setIsBuffering(false);
+                setHasError(false);
+              }
             })
             .catch(() => {
-              setIsBuffering(false);
+              if (!cancelled) setIsBuffering(false);
             });
         });
     };
@@ -101,7 +141,7 @@ export function useVideoPlayer(
       hls.attachMedia(video);
       hls.on(Hls.Events.MANIFEST_PARSED, () => attemptAutoPlay());
       hls.on(Hls.Events.ERROR, (_, data) => {
-        if (data.fatal) handleVideoError();
+        if (!cancelled && data.fatal) advanceFallbackOrError();
       });
     } else if (isTs && mpegts.isSupported()) {
       const player = mpegts.createPlayer({
@@ -113,35 +153,54 @@ export function useVideoPlayer(
       player.attachMediaElement(video);
       player.load();
       attemptAutoPlay();
-      player.on(mpegts.Events.ERROR, () => handleVideoError());
+      player.on(mpegts.Events.ERROR, () => {
+        if (!cancelled) advanceFallbackOrError();
+      });
     } else {
       video.src = currentSrc;
       video.load();
       attemptAutoPlay();
     }
 
-    // Watchdog: if external IPTV stream hangs for >10s with readyState === 0, mark codec/stream notice
+    // Watchdog: if external IPTV stream hangs for >12s with readyState === 0, try next stage
     const watchdog = setTimeout(() => {
       if (
+        !cancelled &&
         videoRef.current &&
-        videoRef.current.readyState === 0 &&
-        currentSrc.startsWith('/api/stream-proxy')
+        videoRef.current.readyState === 0
       ) {
-        handleVideoError();
+        advanceFallbackOrError();
       }
-    }, 10000);
+    }, 12000);
 
     return () => {
+      cancelled = true;
       clearTimeout(watchdog);
       destroyEngines();
     };
   }, [currentSrc]);
 
   const handleVideoError = () => {
-    destroyEngines();
-    setHasError(true);
-    setIsBuffering(false);
-    setIsPlaying(false);
+    advanceFallbackOrError();
+  };
+
+  const retryAndPlayStream = (preferDirectRaw: boolean = false) => {
+    setHasError(false);
+    setIsBuffering(true);
+    const rawClean = (streamUrl || '').trim();
+    const hasRealRaw = rawClean && !isPlaceholderStreamUrl(rawClean);
+    if (preferDirectRaw && hasRealRaw) {
+      attemptStageRef.current = 1;
+      setCurrentSrc(rawClean);
+    } else {
+      attemptStageRef.current = 0;
+      setCurrentSrc(resolveSafeStreamUrl(streamUrl, title));
+    }
+    setTimeout(() => {
+      if (videoRef.current) {
+        videoRef.current.play().then(() => setIsPlaying(true)).catch(() => {});
+      }
+    }, 100);
   };
 
   const handleUserActivity = () => {
@@ -248,6 +307,7 @@ export function useVideoPlayer(
     changeRate,
     handleUserActivity,
     handleVideoError,
+    retryAndPlayStream,
     setDuration,
     setCurrentTime,
     setIsBuffering,
