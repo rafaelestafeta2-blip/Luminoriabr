@@ -95,7 +95,7 @@ jobs:
           done
           if command -v sdkmanager &> /dev/null; then
             yes | sdkmanager --licenses || true
-            sdkmanager --install "platforms;android-35" "build-tools;35.0.0" "platform-tools" || true
+            sdkmanager --install "platforms;android-36" "build-tools;36.0.0" "platforms;android-35" "build-tools;35.0.0" "platform-tools" || true
           fi
 
       - name: Sync Capacitor Android
@@ -107,7 +107,8 @@ jobs:
         env:
           GRADLE_OPTS: "-Dorg.gradle.jvmargs=-Xmx3072m -XX:MaxMetaspaceSize=768m"
         run: |
-          gradle assembleDebug --stacktrace --no-daemon
+          chmod +x gradlew
+          ./gradlew assembleDebug --no-daemon
 
       - name: Locate & Rename Android APK
         run: |
