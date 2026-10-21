@@ -76,17 +76,20 @@ jobs:
           distribution: 'temurin'
           java-version: '21'
 
-      - name: Setup Gradle 8.11.1
+      - name: Setup Gradle 8.14.3
         uses: gradle/actions/setup-gradle@v4
         with:
-          gradle-version: '8.11.1'
+          gradle-version: '8.14.3'
 
       - name: Setup Android SDK Environment & Licenses
         run: |
           echo "ANDROID_HOME=$ANDROID_HOME" >> $GITHUB_ENV
+          mkdir -p android
+          echo "sdk.dir=$ANDROID_HOME" > android/local.properties
           if [ -d "$ANDROID_HOME/cmdline-tools/latest/bin" ]; then
             echo "$ANDROID_HOME/cmdline-tools/latest/bin" >> $GITHUB_PATH
             yes | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --licenses || true
+            $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --install "platforms;android-35" "build-tools;35.0.0" "platform-tools" || true
           fi
 
       - name: Sync Capacitor Android
@@ -98,7 +101,7 @@ jobs:
         env:
           GRADLE_OPTS: "-Dorg.gradle.jvmargs=-Xmx3072m -XX:MaxMetaspaceSize=768m"
         run: |
-          gradle assembleDebug --stacktrace
+          gradle assembleDebug --stacktrace --no-daemon
 
       - name: Locate & Rename Android APK
         run: |
