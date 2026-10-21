@@ -27,10 +27,10 @@ jobs:
       - name: Checkout Code
         uses: actions/checkout@v4
 
-      - name: Setup Node.js 20
+      - name: Setup Node.js 22
         uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22
 
       - name: Install Dependencies
         run: npm install --legacy-peer-deps
@@ -46,7 +46,7 @@ jobs:
           retention-days: 1
 
   # =========================================================================
-  # 2. BUILD ANDROID APK (Uses pre-installed Android SDK on Ubuntu)
+  # 2. BUILD ANDROID APK (Uses Node 22 + Gradle + Built-in Android SDK)
   # =========================================================================
   build-android:
     name: Build Android APK
@@ -56,10 +56,10 @@ jobs:
       - name: Checkout Code
         uses: actions/checkout@v4
 
-      - name: Setup Node.js 20
+      - name: Setup Node.js 22
         uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22
 
       - name: Install Capacitor CLI & Dependencies
         run: npm install --legacy-peer-deps
@@ -79,9 +79,13 @@ jobs:
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v4
 
-      - name: Accept Android Licenses
+      - name: Setup Android SDK Environment & Licenses
         run: |
-          yes | sdkmanager --licenses || true
+          echo "ANDROID_HOME=$ANDROID_HOME" >> $GITHUB_ENV
+          if [ -d "$ANDROID_HOME/cmdline-tools/latest/bin" ]; then
+            echo "$ANDROID_HOME/cmdline-tools/latest/bin" >> $GITHUB_PATH
+            yes | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --licenses || true
+          fi
 
       - name: Sync Capacitor Android
         run: |
@@ -89,6 +93,8 @@ jobs:
 
       - name: Build Android Debug APK
         working-directory: ./android
+        env:
+          GRADLE_OPTS: "-Dorg.gradle.jvmargs=-Xmx3072m -XX:MaxMetaspaceSize=768m"
         run: |
           if [ -f "gradlew" ]; then
             chmod +x gradlew
@@ -120,7 +126,7 @@ jobs:
           retention-days: 14
 
   # =========================================================================
-  # 3. BUILD WINDOWS EXECUTABLE (.EXE) (No web compile needed on Windows)
+  # 3. BUILD WINDOWS EXECUTABLE (.EXE) (Uses Node 22 + Electron Builder)
   # =========================================================================
   build-windows:
     name: Build Windows EXE (Installer & Portable)
@@ -130,10 +136,10 @@ jobs:
       - name: Checkout Code
         uses: actions/checkout@v4
 
-      - name: Setup Node.js 20
+      - name: Setup Node.js 22
         uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22
 
       - name: Download Web Dist
         uses: actions/download-artifact@v4
